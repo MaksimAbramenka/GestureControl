@@ -6,25 +6,16 @@ plugins {
 
 android {
     namespace = "com.gesturecontrol.core.engine"
-    compileSdk =
-        libs.versions.compileSdk
-            .get()
-            .toInt()
+    compileSdk = libs.versions.compileSdk.get().toInt()
 
     defaultConfig {
-        minSdk =
-            libs.versions.minSdk
-                .get()
-                .toInt()
+        minSdk = libs.versions.minSdk.get().toInt()
     }
 
     compileOptions {
         sourceCompatibility = JavaVersion.VERSION_17
         targetCompatibility = JavaVersion.VERSION_17
     }
-
-    // externalNativeBuild (CMake) intentionally not wired yet — added together with
-    // src/main/cpp/CMakeLists.txt in the native-core milestone (plan §4.6, week 3).
 }
 
 kotlin {

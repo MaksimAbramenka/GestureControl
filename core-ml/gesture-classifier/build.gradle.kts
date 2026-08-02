@@ -6,16 +6,10 @@ plugins {
 
 android {
     namespace = "com.gesturecontrol.core.ml.classifier"
-    compileSdk =
-        libs.versions.compileSdk
-            .get()
-            .toInt()
+    compileSdk = libs.versions.compileSdk.get().toInt()
 
     defaultConfig {
-        minSdk =
-            libs.versions.minSdk
-                .get()
-                .toInt()
+        minSdk = libs.versions.minSdk.get().toInt()
     }
 
     compileOptions {
@@ -32,9 +26,6 @@ kotlin {
 
 dependencies {
     implementation(project(":domain"))
-
-    // LiteRT inference dependency intentionally not pinned yet — added once we reach
-    // Milestone 3 (train MLP, export to LiteRT) so we resolve current artifact coordinates then.
 
     testImplementation(libs.junit.jupiter)
     testImplementation(libs.mockk)
