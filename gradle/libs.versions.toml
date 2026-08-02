@@ -1,4 +1,8 @@
 [versions]
+compileSdk = "37"
+minSdk = "26"
+targetSdk = "37"
+
 agp = "9.3.0"
 kotlin = "2.4.0"
 composeBom = "2026.06.00"
@@ -11,6 +15,8 @@ coroutines = "1.10.2"
 junitJupiter = "6.1.2"
 mockk = "1.14.3"
 turbine = "0.12.2"
+spotless = "8.9.0"
+ktlint = "1.5.0"
 
 [libraries]
 core-ktx = { group = "androidx.core", name = "core-ktx", version.ref = "coreKtx" }
@@ -47,3 +53,4 @@ android-application = { id = "com.android.application", version.ref = "agp" }
 android-library = { id = "com.android.library", version.ref = "agp" }
 kotlin-jvm = { id = "org.jetbrains.kotlin.jvm", version.ref = "kotlin" }
 kotlin-compose = { id = "org.jetbrains.kotlin.plugin.compose", version.ref = "kotlin" }
+spotless = { id = "com.diffplug.spotless", version.ref = "spotless" }

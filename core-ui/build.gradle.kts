@@ -7,10 +7,16 @@ plugins {
 
 android {
     namespace = "com.gesturecontrol.core.ui"
-    compileSdk = 37
+    compileSdk =
+        libs.versions.compileSdk
+            .get()
+            .toInt()
 
     defaultConfig {
-        minSdk = 26
+        minSdk =
+            libs.versions.minSdk
+                .get()
+                .toInt()
     }
 
     compileOptions {

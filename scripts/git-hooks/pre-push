@@ -1,0 +1,9 @@
+#!/usr/bin/env bash
+# Tracked in git (not .git/hooks, which isn't) — active once per clone via:
+#   git config core.hooksPath scripts/git-hooks
+set -euo pipefail
+
+cd "$(git rev-parse --show-toplevel)"
+
+echo "Running spotlessCheck before push..."
+./gradlew spotlessCheck -q

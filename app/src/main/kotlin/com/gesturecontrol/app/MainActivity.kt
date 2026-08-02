@@ -27,9 +27,10 @@ private fun GestureControlScaffold() {
     Scaffold { innerPadding ->
         Text(
             text = "GestureControl",
-            modifier = Modifier
-                .fillMaxSize()
-                .padding(innerPadding)
+            modifier =
+                Modifier
+                    .fillMaxSize()
+                    .padding(innerPadding),
         )
     }
 }
