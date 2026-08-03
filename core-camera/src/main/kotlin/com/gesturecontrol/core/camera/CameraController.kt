@@ -27,18 +27,16 @@ class CameraController(
     ) {
         val cameraProvider = ProcessCameraProvider.awaitInstance(context)
 
-        val preview =
-            Preview.Builder().build().apply {
-                setSurfaceProvider { request -> _surfaceRequests.value = request }
-            }
+        val preview = Preview.Builder().build().apply {
+            setSurfaceProvider { request -> _surfaceRequests.value = request }
+        }
 
-        val imageAnalysis =
-            ImageAnalysis
-                .Builder()
-                .setBackpressureStrategy(ImageAnalysis.STRATEGY_KEEP_ONLY_LATEST)
-                .setOutputImageFormat(ImageAnalysis.OUTPUT_IMAGE_FORMAT_RGBA_8888)
-                .build()
-                .apply { setAnalyzer(ContextCompat.getMainExecutor(context), analyzer) }
+        val imageAnalysis = ImageAnalysis
+            .Builder()
+            .setBackpressureStrategy(ImageAnalysis.STRATEGY_KEEP_ONLY_LATEST)
+            .setOutputImageFormat(ImageAnalysis.OUTPUT_IMAGE_FORMAT_RGBA_8888)
+            .build()
+            .apply { setAnalyzer(ContextCompat.getMainExecutor(context), analyzer) }
 
         cameraProvider.unbindAll()
         cameraProvider.bindToLifecycle(lifecycleOwner, cameraSelector, preview, imageAnalysis)

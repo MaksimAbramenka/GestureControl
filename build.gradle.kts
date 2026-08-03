@@ -6,27 +6,26 @@ plugins {
     alias(libs.plugins.spotless)
 }
 
-val ktlintChainWrapThreshold =
-    "ktlint_chain_method_rule_force_multiline_when_chain_operator_count_greater_or_equal_than" to "6"
+val ktlintOverrides = mapOf(
+    "ktlint_code_style" to "intellij_idea",
+    "ktlint_function_naming_ignore_when_annotated_with" to "Composable",
+    "ktlint_standard_class-signature" to "disabled",
+    "ktlint_standard_function-signature" to "disabled",
+    "ktlint_standard_chain-method-continuation" to "disabled",
+    "ktlint_standard_multiline-expression-wrapping" to "disabled",
+)
 
 spotless {
     kotlin {
         target("**/*.kt")
         targetExclude("**/build/**/*.kt")
-        ktlint(libs.versions.ktlint.get())
-            .editorConfigOverride(
-                mapOf(
-                    "ktlint_function_naming_ignore_when_annotated_with" to "Composable",
-                    ktlintChainWrapThreshold,
-                ),
-            )
+        ktlint(libs.versions.ktlint.get()).editorConfigOverride(ktlintOverrides)
         trimTrailingWhitespace()
         endWithNewline()
     }
     kotlinGradle {
         target("**/*.kts")
         targetExclude("**/build/**/*.kts")
-        ktlint(libs.versions.ktlint.get())
-            .editorConfigOverride(mapOf(ktlintChainWrapThreshold))
+        ktlint(libs.versions.ktlint.get()).editorConfigOverride(ktlintOverrides)
     }
 }

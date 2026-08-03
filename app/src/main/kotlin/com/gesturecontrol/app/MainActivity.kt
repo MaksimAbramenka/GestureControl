@@ -54,12 +54,11 @@ private fun GestureControlApp() {
                 PackageManager.PERMISSION_GRANTED,
         )
     }
-    val permissionLauncher =
-        rememberLauncherForActivityResult(
-            ActivityResultContracts.RequestPermission(),
-        ) { granted ->
-            hasCameraPermission = granted
-        }
+    val permissionLauncher = rememberLauncherForActivityResult(
+        ActivityResultContracts.RequestPermission(),
+    ) { granted ->
+        hasCameraPermission = granted
+    }
 
     LaunchedEffect(Unit) {
         if (!hasCameraPermission) permissionLauncher.launch(Manifest.permission.CAMERA)
@@ -67,17 +66,16 @@ private fun GestureControlApp() {
 
     Scaffold { innerPadding ->
         Box(
-            modifier =
-                Modifier
-                    .fillMaxSize()
-                    .padding(innerPadding),
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(innerPadding),
         ) {
             if (hasCameraPermission) {
                 GestureCanvasHost()
             } else {
-                CameraPermissionRationale(
-                    onRequestPermission = { permissionLauncher.launch(Manifest.permission.CAMERA) },
-                )
+                CameraPermissionRationale {
+                    permissionLauncher.launch(Manifest.permission.CAMERA)
+                }
             }
         }
     }

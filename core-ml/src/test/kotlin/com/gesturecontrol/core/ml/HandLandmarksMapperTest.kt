@@ -10,19 +10,17 @@ import org.junit.jupiter.api.assertThrows
 class HandLandmarksMapperTest {
     private val someImageDimensions = ImageDimensions(width = 640, height = 480)
 
-    private fun fakeHandLandmarks(count: Int = 21): List<NormalizedLandmark> =
-        (0 until count).map { i ->
-            NormalizedLandmark.create(i / 100f, i / 200f, i / 300f)
-        }
+    private fun fakeHandLandmarks(count: Int = 21): List<NormalizedLandmark> = (0 until count).map { i ->
+        NormalizedLandmark.create(i / 100f, i / 200f, i / 300f)
+    }
 
     @Test
     fun `maps no detected hands to an empty result`() {
-        val result =
-            HandLandmarksMapper.toDomain(
-                mediapipeHands = emptyList(),
-                timestampMs = 1234L,
-                imageDimensions = someImageDimensions,
-            )
+        val result = HandLandmarksMapper.toDomain(
+            mediapipeHands = emptyList(),
+            timestampMs = 1234L,
+            imageDimensions = someImageDimensions,
+        )
 
         assertTrue(result.hands.isEmpty())
         assertEquals(1234L, result.timestampMs)
@@ -33,12 +31,11 @@ class HandLandmarksMapperTest {
     fun `maps a single detected hand preserving landmark order and coordinates`() {
         val mediapipeHand = fakeHandLandmarks()
 
-        val result =
-            HandLandmarksMapper.toDomain(
-                mediapipeHands = listOf(mediapipeHand),
-                timestampMs = 42L,
-                imageDimensions = someImageDimensions,
-            )
+        val result = HandLandmarksMapper.toDomain(
+            mediapipeHands = listOf(mediapipeHand),
+            timestampMs = 42L,
+            imageDimensions = someImageDimensions,
+        )
 
         assertEquals(1, result.hands.size)
         val mappedPoints = result.hands.single().points
@@ -55,12 +52,11 @@ class HandLandmarksMapperTest {
         val firstHand = fakeHandLandmarks()
         val secondHand = fakeHandLandmarks().map { NormalizedLandmark.create(it.x() + 1f, it.y(), it.z()) }
 
-        val result =
-            HandLandmarksMapper.toDomain(
-                mediapipeHands = listOf(firstHand, secondHand),
-                timestampMs = 0L,
-                imageDimensions = someImageDimensions,
-            )
+        val result = HandLandmarksMapper.toDomain(
+            mediapipeHands = listOf(firstHand, secondHand),
+            timestampMs = 0L,
+            imageDimensions = someImageDimensions,
+        )
 
         assertEquals(2, result.hands.size)
         assertEquals(firstHand.first().x(), result.hands[0].points.first().x)

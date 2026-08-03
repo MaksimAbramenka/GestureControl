@@ -6,9 +6,12 @@ indent_size = 4
 max_line_length = 120
 insert_final_newline = true
 trim_trailing_whitespace = true
-ktlint_code_style = ktlint_official
+ktlint_code_style = intellij_idea
 ktlint_function_naming_ignore_when_annotated_with = Composable
-ktlint_chain_method_rule_force_multiline_when_chain_operator_count_greater_or_equal_than = 6
+ktlint_standard_class-signature = disabled
+ktlint_standard_function-signature = disabled
+ktlint_standard_chain-method-continuation = disabled
+ktlint_standard_multiline-expression-wrapping = disabled
 
 [*.{xml,toml,yml,yaml}]
 indent_style = space

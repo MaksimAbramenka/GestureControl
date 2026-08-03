@@ -12,10 +12,9 @@ object HandLandmarksMapper {
         timestampMs: Long,
         imageDimensions: ImageDimensions,
     ): HandDetectionResult {
-        val hands =
-            mediapipeHands.map { hand ->
-                HandLandmarks(hand.map { NormalizedPoint(x = it.x(), y = it.y(), z = it.z()) })
-            }
+        val hands = mediapipeHands.map { hand ->
+            HandLandmarks(hand.map { NormalizedPoint(x = it.x(), y = it.y(), z = it.z()) })
+        }
         return HandDetectionResult(hands = hands, timestampMs = timestampMs, imageDimensions = imageDimensions)
     }
 }

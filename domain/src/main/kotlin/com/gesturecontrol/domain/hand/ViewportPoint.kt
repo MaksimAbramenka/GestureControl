@@ -29,11 +29,10 @@ fun NormalizedPoint.toViewportPoint(
         "Viewport dimensions must be positive, got $viewportDimensions"
     }
 
-    val scale =
-        max(
-            viewportDimensions.width / imageDimensions.width,
-            viewportDimensions.height / imageDimensions.height,
-        )
+    val scale = max(
+        viewportDimensions.width / imageDimensions.width,
+        viewportDimensions.height / imageDimensions.height,
+    )
 
     val scaledImageWidth = imageDimensions.width * scale
     val scaledImageHeight = imageDimensions.height * scale

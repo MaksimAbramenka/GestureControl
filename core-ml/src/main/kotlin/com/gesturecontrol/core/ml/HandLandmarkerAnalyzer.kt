@@ -42,38 +42,36 @@ class HandLandmarkerAnalyzer(
     @Volatile
     private var latestImageDimensions = ImageDimensions(width = 1, height = 1)
 
-    private val handLandmarker: HandLandmarker =
-        HandLandmarker.createFromOptions(
-            context,
-            HandLandmarker.HandLandmarkerOptions
-                .builder()
-                .setBaseOptions(BaseOptions.builder().setModelAssetPath(modelAssetPath).build())
-                .setRunningMode(RunningMode.LIVE_STREAM)
-                .setNumHands(numHands)
-                .setResultListener { result, _ ->
-                    _results.tryEmit(
-                        HandLandmarksMapper.toDomain(
-                            mediapipeHands = result.landmarks(),
-                            timestampMs = result.timestampMs(),
-                            imageDimensions = latestImageDimensions,
-                        ),
-                    )
-                }.setErrorListener { error -> Log.e(TAG, "HandLandmarker error", error) }
-                .build(),
-        )
+    private val handLandmarker: HandLandmarker = HandLandmarker.createFromOptions(
+        context,
+        HandLandmarker.HandLandmarkerOptions
+            .builder()
+            .setBaseOptions(BaseOptions.builder().setModelAssetPath(modelAssetPath).build())
+            .setRunningMode(RunningMode.LIVE_STREAM)
+            .setNumHands(numHands)
+            .setResultListener { result, _ ->
+                _results.tryEmit(
+                    HandLandmarksMapper.toDomain(
+                        mediapipeHands = result.landmarks(),
+                        timestampMs = result.timestampMs(),
+                        imageDimensions = latestImageDimensions,
+                    ),
+                )
+            }.setErrorListener { error -> Log.e(TAG, "HandLandmarker error", error) }
+            .build(),
+    )
 
     @ExperimentalGetImage
     override fun analyze(imageProxy: ImageProxy) {
         val bitmapBuffer = createBitmap(imageProxy.width, imageProxy.height)
         bitmapBuffer.copyPixelsFromBuffer(imageProxy.planes[0].buffer)
 
-        val matrix =
-            Matrix().apply {
-                postRotate(imageProxy.imageInfo.rotationDegrees.toFloat())
-                if (isFrontCamera) {
-                    postScale(-1f, 1f, imageProxy.width.toFloat(), imageProxy.height.toFloat())
-                }
+        val matrix = Matrix().apply {
+            postRotate(imageProxy.imageInfo.rotationDegrees.toFloat())
+            if (isFrontCamera) {
+                postScale(-1f, 1f, imageProxy.width.toFloat(), imageProxy.height.toFloat())
             }
+        }
         val rotatedBitmap =
             Bitmap.createBitmap(bitmapBuffer, 0, 0, bitmapBuffer.width, bitmapBuffer.height, matrix, true)
 
