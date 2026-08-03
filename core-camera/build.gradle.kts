@@ -27,16 +27,18 @@ kotlin {
 dependencies {
     implementation(project(":domain"))
 
+    implementation(libs.core.ktx)
     implementation(libs.camerax.core)
     implementation(libs.camerax.camera2)
     implementation(libs.camerax.lifecycle)
-    implementation(libs.camerax.view)
     implementation(libs.kotlinx.coroutines.android)
 
+    testImplementation(platform(libs.junit.bom))
     testImplementation(libs.junit.jupiter)
     testImplementation(libs.mockk)
     testImplementation(libs.turbine)
     testImplementation(libs.kotlinx.coroutines.test)
+    testRuntimeOnly(libs.junit.platform.launcher)
 }
 
 tasks.withType<Test> {

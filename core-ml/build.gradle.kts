@@ -29,12 +29,16 @@ dependencies {
     implementation(project(":core-ml:gesture-classifier"))
 
     implementation(libs.mediapipe.tasks.vision)
+    implementation(libs.camerax.core)
+    implementation(libs.core.ktx)
     implementation(libs.kotlinx.coroutines.android)
 
+    testImplementation(platform(libs.junit.bom))
     testImplementation(libs.junit.jupiter)
     testImplementation(libs.mockk)
     testImplementation(libs.turbine)
     testImplementation(libs.kotlinx.coroutines.test)
+    testRuntimeOnly(libs.junit.platform.launcher)
 }
 
 tasks.withType<Test> {
