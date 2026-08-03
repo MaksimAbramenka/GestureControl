@@ -4,8 +4,11 @@ import androidx.camera.compose.CameraXViewfinder
 import androidx.camera.core.SurfaceRequest
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.padding
 import androidx.compose.runtime.Composable
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.unit.dp
 import com.gesturecontrol.domain.hand.HandDetectionResult
 
 @Composable
@@ -27,6 +30,13 @@ fun GestureCanvasScreen(
             handDetectionResult = handDetectionResult,
             mirrored = mirrored,
             modifier = Modifier.fillMaxSize(),
+        )
+
+        FpsLabel(
+            fps = handDetectionResult.fps,
+            modifier = Modifier
+                .align(Alignment.TopStart)
+                .padding(8.dp),
         )
     }
 }

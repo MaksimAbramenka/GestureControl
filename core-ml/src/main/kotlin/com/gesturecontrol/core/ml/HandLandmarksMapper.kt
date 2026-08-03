@@ -11,10 +11,16 @@ object HandLandmarksMapper {
         mediapipeHands: List<List<NormalizedLandmark>>,
         timestampMs: Long,
         imageDimensions: ImageDimensions,
+        fps: Float,
     ): HandDetectionResult {
         val hands = mediapipeHands.map { hand ->
             HandLandmarks(hand.map { NormalizedPoint(x = it.x(), y = it.y(), z = it.z()) })
         }
-        return HandDetectionResult(hands = hands, timestampMs = timestampMs, imageDimensions = imageDimensions)
+        return HandDetectionResult(
+            hands = hands,
+            timestampMs = timestampMs,
+            imageDimensions = imageDimensions,
+            fps = fps,
+        )
     }
 }

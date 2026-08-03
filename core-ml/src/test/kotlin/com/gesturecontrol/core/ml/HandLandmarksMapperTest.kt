@@ -9,6 +9,7 @@ import org.junit.jupiter.api.assertThrows
 
 class HandLandmarksMapperTest {
     private val someImageDimensions = ImageDimensions(width = 640, height = 480)
+    private val someFps = 30f
 
     private fun fakeHandLandmarks(count: Int = 21): List<NormalizedLandmark> = (0 until count).map { i ->
         NormalizedLandmark.create(i / 100f, i / 200f, i / 300f)
@@ -20,11 +21,13 @@ class HandLandmarksMapperTest {
             mediapipeHands = emptyList(),
             timestampMs = 1234L,
             imageDimensions = someImageDimensions,
+            fps = someFps,
         )
 
         assertTrue(result.hands.isEmpty())
         assertEquals(1234L, result.timestampMs)
         assertEquals(someImageDimensions, result.imageDimensions)
+        assertEquals(someFps, result.fps)
     }
 
     @Test
@@ -35,6 +38,7 @@ class HandLandmarksMapperTest {
             mediapipeHands = listOf(mediapipeHand),
             timestampMs = 42L,
             imageDimensions = someImageDimensions,
+            fps = someFps,
         )
 
         assertEquals(1, result.hands.size)
@@ -56,6 +60,7 @@ class HandLandmarksMapperTest {
             mediapipeHands = listOf(firstHand, secondHand),
             timestampMs = 0L,
             imageDimensions = someImageDimensions,
+            fps = someFps,
         )
 
         assertEquals(2, result.hands.size)
@@ -70,6 +75,7 @@ class HandLandmarksMapperTest {
                 mediapipeHands = listOf(fakeHandLandmarks(count = 5)),
                 timestampMs = 0L,
                 imageDimensions = someImageDimensions,
+                fps = someFps,
             )
         }
     }

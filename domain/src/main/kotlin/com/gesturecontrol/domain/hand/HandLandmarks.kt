@@ -24,4 +24,5 @@ data class HandDetectionResult(
     val hands: List<HandLandmarks>,
     val timestampMs: Long,
     val imageDimensions: ImageDimensions,
+    val fps: Float,
 )

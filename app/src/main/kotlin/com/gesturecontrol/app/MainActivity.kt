@@ -122,9 +122,9 @@ private fun CameraPermissionRationale(onRequestPermission: () -> Unit) {
     }
 }
 
-private val EMPTY_HAND_DETECTION_RESULT =
-    HandDetectionResult(
-        hands = emptyList(),
-        timestampMs = 0L,
-        imageDimensions = ImageDimensions(width = 1, height = 1),
-    )
+private val EMPTY_HAND_DETECTION_RESULT = HandDetectionResult(
+    hands = emptyList(),
+    timestampMs = 0L,
+    imageDimensions = ImageDimensions(width = 1, height = 1),
+    fps = 0f,
+)

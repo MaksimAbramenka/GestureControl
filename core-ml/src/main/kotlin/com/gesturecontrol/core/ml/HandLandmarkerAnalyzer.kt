@@ -11,8 +11,10 @@ import androidx.camera.core.ImageProxy
 import androidx.core.graphics.createBitmap
 import com.gesturecontrol.domain.hand.HandDetectionResult
 import com.gesturecontrol.domain.hand.ImageDimensions
+import com.gesturecontrol.domain.performance.FrameRateTracker
 import com.google.mediapipe.framework.image.BitmapImageBuilder
 import com.google.mediapipe.tasks.core.BaseOptions
+import com.google.mediapipe.tasks.core.Delegate
 import com.google.mediapipe.tasks.vision.core.RunningMode
 import com.google.mediapipe.tasks.vision.handlandmarker.HandLandmarker
 import kotlinx.coroutines.flow.MutableSharedFlow
@@ -42,11 +44,15 @@ class HandLandmarkerAnalyzer(
     @Volatile
     private var latestImageDimensions = ImageDimensions(width = 1, height = 1)
 
+    private val frameRateTracker = FrameRateTracker()
+
     private val handLandmarker: HandLandmarker = HandLandmarker.createFromOptions(
         context,
         HandLandmarker.HandLandmarkerOptions
             .builder()
-            .setBaseOptions(BaseOptions.builder().setModelAssetPath(modelAssetPath).build())
+            .setBaseOptions(
+                BaseOptions.builder().setModelAssetPath(modelAssetPath).setDelegate(Delegate.GPU).build(),
+            )
             .setRunningMode(RunningMode.LIVE_STREAM)
             .setNumHands(numHands)
             .setResultListener { result, _ ->
@@ -55,6 +61,7 @@ class HandLandmarkerAnalyzer(
                         mediapipeHands = result.landmarks(),
                         timestampMs = result.timestampMs(),
                         imageDimensions = latestImageDimensions,
+                        fps = frameRateTracker.onFrame(result.timestampMs()),
                     ),
                 )
             }.setErrorListener { error -> Log.e(TAG, "HandLandmarker error", error) }
