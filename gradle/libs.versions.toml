@@ -11,6 +11,7 @@ lifecycle = "2.9.0"
 activityCompose = "1.10.0"
 camerax = "1.5.1"
 mediapipeTasksVision = "0.10.29"
+litert = "2.1.5"
 coroutines = "1.10.2"
 junitJupiter = "6.1.2"
 mockk = "1.14.3"
@@ -39,6 +40,7 @@ camerax-lifecycle = { group = "androidx.camera", name = "camera-lifecycle", vers
 camerax-compose = { group = "androidx.camera", name = "camera-compose", version.ref = "camerax" }
 
 mediapipe-tasks-vision = { group = "com.google.mediapipe", name = "tasks-vision", version.ref = "mediapipeTasksVision" }
+litert = { group = "com.google.ai.edge.litert", name = "litert", version.ref = "litert" }
 
 kotlinx-coroutines-core = { group = "org.jetbrains.kotlinx", name = "kotlinx-coroutines-core", version.ref = "coroutines" }
 kotlinx-coroutines-android = { group = "org.jetbrains.kotlinx", name = "kotlinx-coroutines-android", version.ref = "coroutines" }

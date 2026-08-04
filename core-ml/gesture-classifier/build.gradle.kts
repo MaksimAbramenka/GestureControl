@@ -26,6 +26,7 @@ kotlin {
 
 dependencies {
     implementation(project(":domain"))
+    implementation(libs.litert)
 
     testImplementation(platform(libs.junit.bom))
     testImplementation(libs.junit.jupiter)

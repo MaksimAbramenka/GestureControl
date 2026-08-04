@@ -43,6 +43,7 @@ dependencies {
     implementation(project(":domain"))
     implementation(project(":core-camera"))
     implementation(project(":core-ml"))
+    implementation(project(":core-ml:gesture-classifier"))
     implementation(project(":core-engine"))
     implementation(project(":core-ui"))
 

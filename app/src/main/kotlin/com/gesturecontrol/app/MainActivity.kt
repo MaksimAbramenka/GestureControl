@@ -33,10 +33,12 @@ import androidx.core.content.ContextCompat
 import androidx.lifecycle.compose.LocalLifecycleOwner
 import com.gesturecontrol.core.camera.CameraController
 import com.gesturecontrol.core.ml.HandLandmarkerAnalyzer
+import com.gesturecontrol.core.ml.classifier.GestureClassifier
 import com.gesturecontrol.core.ml.training.TrainingDataRecorder
 import com.gesturecontrol.core.ui.camera.DataCollectionControls
 import com.gesturecontrol.core.ui.camera.GestureCanvasScreen
 import com.gesturecontrol.domain.gesture.GestureClass
+import com.gesturecontrol.domain.gesture.GestureSmoother
 import com.gesturecontrol.domain.gesture.HandFeatureExtractor
 import com.gesturecontrol.domain.hand.HandDetectionResult
 import com.gesturecontrol.domain.hand.ImageDimensions
@@ -96,9 +98,14 @@ private fun GestureCanvasHost() {
     val cameraController = remember { CameraController(context) }
     val analyzer = remember { HandLandmarkerAnalyzer(context, isFrontCamera = true) }
     val trainingDataRecorder = remember { TrainingDataRecorder(context) }
+    val gestureClassifier = remember { GestureClassifier(context) }
+    val gestureSmoother = remember { GestureSmoother() }
 
-    DisposableEffect(analyzer) {
-        onDispose { analyzer.close() }
+    DisposableEffect(analyzer, gestureClassifier) {
+        onDispose {
+            analyzer.close()
+            gestureClassifier.close()
+        }
     }
 
     LaunchedEffect(cameraController, analyzer) {
@@ -110,13 +117,23 @@ private fun GestureCanvasHost() {
 
     var selectedGestureClass by remember { mutableStateOf<GestureClass?>(null) }
     var recordedRowCount by remember { mutableIntStateOf(trainingDataRecorder.recordedRowCount) }
+    var currentGesture by remember { mutableStateOf<GestureClass?>(null) }
 
     SideEffect {
-        val gestureClass = selectedGestureClass
         val hand = handDetectionResult.hands.firstOrNull()
-        if (gestureClass != null && hand != null) {
-            trainingDataRecorder.record(gestureClass, HandFeatureExtractor.extractFeatures(hand))
-            recordedRowCount++
+        if (hand == null) {
+            currentGesture = null
+        } else {
+            val features = HandFeatureExtractor.extractFeatures(hand)
+
+            val recordingClass = selectedGestureClass
+            if (recordingClass != null) {
+                trainingDataRecorder.record(recordingClass, features)
+                recordedRowCount++
+            }
+
+            val classified = gestureClassifier.classify(features)
+            currentGesture = gestureSmoother.smooth(classified.gestureClass)
         }
     }
 
@@ -124,6 +141,7 @@ private fun GestureCanvasHost() {
         GestureCanvasScreen(
             surfaceRequest = surfaceRequest,
             handDetectionResult = handDetectionResult,
+            currentGesture = currentGesture,
             mirrored = false,
             modifier = Modifier.fillMaxSize(),
         )
