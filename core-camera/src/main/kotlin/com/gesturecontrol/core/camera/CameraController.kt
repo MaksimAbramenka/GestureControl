@@ -15,12 +15,14 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import java.util.concurrent.Executors
+import java.util.concurrent.TimeUnit
 
 /** Thin CameraX wrapper: binds a Preview + ImageAnalysis pair to a lifecycle. */
 class CameraController(private val context: Context) {
     private val _surfaceRequests = MutableStateFlow<SurfaceRequest?>(null)
     val surfaceRequests: StateFlow<SurfaceRequest?> = _surfaceRequests.asStateFlow()
     private val analysisExecutor = Executors.newSingleThreadExecutor()
+    private var cameraProvider: ProcessCameraProvider? = null
 
     suspend fun bindToLifecycle(
         lifecycleOwner: LifecycleOwner,
@@ -28,6 +30,7 @@ class CameraController(private val context: Context) {
         cameraSelector: CameraSelector = CameraSelector.DEFAULT_FRONT_CAMERA,
     ) {
         val cameraProvider = ProcessCameraProvider.awaitInstance(context)
+        this.cameraProvider = cameraProvider
 
         val preview = Preview.Builder().build().apply {
             setSurfaceProvider { request -> _surfaceRequests.value = request }
@@ -49,5 +52,11 @@ class CameraController(private val context: Context) {
 
         cameraProvider.unbindAll()
         cameraProvider.bindToLifecycle(lifecycleOwner, cameraSelector, preview, imageAnalysis)
+    }
+
+    fun unbindAndAwaitIdle() {
+        cameraProvider?.unbindAll()
+        analysisExecutor.shutdown()
+        analysisExecutor.awaitTermination(1, TimeUnit.SECONDS)
     }
 }

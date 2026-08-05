@@ -5,6 +5,8 @@ targetSdk = "37"
 
 agp = "9.3.0"
 kotlin = "2.4.0"
+ndk = "29.0.14206865"
+cmake = "3.31.6"
 composeBom = "2026.06.00"
 coreKtx = "1.15.0"
 lifecycle = "2.9.0"

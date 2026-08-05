@@ -7,9 +7,24 @@ plugins {
 android {
     namespace = "com.gesturecontrol.core.engine"
     compileSdk = libs.versions.compileSdk.get().toInt()
+    ndkVersion = libs.versions.ndk.get()
 
     defaultConfig {
         minSdk = libs.versions.minSdk.get().toInt()
+
+        externalNativeBuild {
+            cmake {
+                cppFlags += "-std=c++20"
+                abiFilters += listOf("arm64-v8a", "armeabi-v7a")
+            }
+        }
+    }
+
+    externalNativeBuild {
+        cmake {
+            path = file("src/main/cpp/CMakeLists.txt")
+            version = libs.versions.cmake.get()
+        }
     }
 
     compileOptions {

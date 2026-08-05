@@ -31,6 +31,7 @@ kotlin {
 
 dependencies {
     implementation(project(":domain"))
+    implementation(project(":core-engine"))
 
     implementation(libs.camerax.core)
     implementation(libs.camerax.compose)

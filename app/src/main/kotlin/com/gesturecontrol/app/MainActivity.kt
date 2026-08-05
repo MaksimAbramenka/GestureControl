@@ -101,8 +101,9 @@ private fun GestureCanvasHost() {
     val gestureClassifier = remember { GestureClassifier(context) }
     val gestureSmoother = remember { GestureSmoother() }
 
-    DisposableEffect(analyzer, gestureClassifier) {
+    DisposableEffect(cameraController, analyzer, gestureClassifier) {
         onDispose {
+            cameraController.unbindAndAwaitIdle()
             analyzer.close()
             gestureClassifier.close()
         }
