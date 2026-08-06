@@ -1,5 +1,6 @@
 package com.gesturecontrol.core.ui.engine
 
+import android.graphics.PixelFormat
 import android.view.Choreographer
 import android.view.SurfaceHolder
 import android.view.SurfaceView
@@ -12,9 +13,11 @@ import androidx.compose.ui.viewinterop.AndroidView
 import com.gesturecontrol.core.engine.NativeEngine
 
 @Composable
-fun NativeCanvasSurface(modifier: Modifier = Modifier) {
-    val nativeEngine = remember { NativeEngine() }
-    val renderLoop = remember { NativeRenderLoop(nativeEngine) }
+fun NativeCanvasSurface(
+    nativeEngine: NativeEngine,
+    modifier: Modifier = Modifier,
+) {
+    val renderLoop = remember(nativeEngine) { NativeRenderLoop(nativeEngine) }
 
     DisposableEffect(renderLoop) {
         onDispose { renderLoop.stop() }
@@ -24,6 +27,8 @@ fun NativeCanvasSurface(modifier: Modifier = Modifier) {
         modifier = modifier.fillMaxSize(),
         factory = { context ->
             SurfaceView(context).apply {
+                setZOrderOnTop(true)
+                holder.setFormat(PixelFormat.TRANSLUCENT)
                 holder.addCallback(
                     object : SurfaceHolder.Callback {
                         override fun surfaceCreated(holder: SurfaceHolder) {

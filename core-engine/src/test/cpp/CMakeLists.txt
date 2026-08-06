@@ -17,6 +17,10 @@ enable_testing()
 
 add_executable(gesture_canvas_core_tests
     input/InputEventTest.cpp
+    scene/SceneGraphTest.cpp
+    render/RibbonTessellatorTest.cpp
+    ../../main/cpp/scene/SceneGraph.cpp
+    ../../main/cpp/render/RibbonTessellator.cpp
 )
 
 target_include_directories(gesture_canvas_core_tests PRIVATE

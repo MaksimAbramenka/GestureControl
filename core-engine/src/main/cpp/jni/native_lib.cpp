@@ -7,43 +7,43 @@
 
 #include "input/InputEvent.h"
 #include "render/EglContext.h"
-#include "render/TriangleRenderer.h"
+#include "render/StrokeRenderer.h"
+#include "scene/SceneGraph.h"
 
 #define LOG_TAG "GestureCanvasCore"
 #define LOGE(...) __android_log_print(ANDROID_LOG_ERROR, LOG_TAG, __VA_ARGS__)
 
 using gesture_canvas::EglContext;
 using gesture_canvas::InputEvent;
-using gesture_canvas::TriangleRenderer;
+using gesture_canvas::SceneGraph;
+using gesture_canvas::StrokeRenderer;
 
 namespace {
 
-EglContext gEglContext;
-TriangleRenderer gRenderer;
-bool gRendererInitialized = false;
+    EglContext gEglContext;
+    StrokeRenderer gRenderer;
+    SceneGraph gScene;
+    bool gRendererInitialized = false;
 
-std::mutex gInputQueueMutex;
-std::vector<InputEvent> gInputQueue;
-
-float gBrushColor[3] = {1.0f, 1.0f, 1.0f};
-float gBrushSize = 4.0f;
+    std::mutex gInputQueueMutex;
+    std::vector<InputEvent> gInputQueue;
 
 // Drains the thread-safe input queue on the calling (render) thread, per the
 // plan's chosen threading pattern: nativeSubmitInput may be called from the
 // MediaPipe callback thread, nativeRenderFrame always runs on the render
 // thread and is the only place the queue is consumed.
-std::vector<InputEvent> drainInputQueue() {
-    std::lock_guard<std::mutex> lock(gInputQueueMutex);
-    std::vector<InputEvent> drained;
-    drained.swap(gInputQueue);
-    return drained;
-}
+    std::vector<InputEvent> drainInputQueue() {
+        std::lock_guard<std::mutex> lock(gInputQueueMutex);
+        std::vector<InputEvent> drained;
+        drained.swap(gInputQueue);
+        return drained;
+    }
 
 } // namespace
 
 extern "C" JNIEXPORT void JNICALL
 Java_com_gesturecontrol_core_engine_NativeEngine_nativeInit(
-    JNIEnv *env, jobject /* thiz */, jobject surface) {
+        JNIEnv *env, jobject /* thiz */, jobject surface) {
     ANativeWindow *window = ANativeWindow_fromSurface(env, surface);
     if (window == nullptr) {
         LOGE("ANativeWindow_fromSurface returned null");
@@ -63,34 +63,36 @@ Java_com_gesturecontrol_core_engine_NativeEngine_nativeInit(
     gRenderer.resize(gEglContext.width(), gEglContext.height());
     gRendererInitialized = gRenderer.init();
     if (!gRendererInitialized) {
-        LOGE("TriangleRenderer init failed");
+        LOGE("StrokeRenderer init failed");
     }
 }
 
 extern "C" JNIEXPORT void JNICALL
 Java_com_gesturecontrol_core_engine_NativeEngine_nativeRenderFrame(
-    JNIEnv *env, jobject /* thiz */) {
+        JNIEnv *env, jobject /* thiz */) {
     if (!gRendererInitialized || !gEglContext.isValid()) {
         return;
     }
 
-    drainInputQueue();
+    for (const auto &event: drainInputQueue()) {
+        gScene.submitInput(event);
+    }
 
     if (!gEglContext.makeCurrent()) {
         LOGE("eglMakeCurrent failed in nativeRenderFrame");
         return;
     }
 
-    gRenderer.draw();
+    gRenderer.draw(gScene.visibleStrokes());
     gEglContext.swapBuffers();
 }
 
 extern "C" JNIEXPORT void JNICALL
 Java_com_gesturecontrol_core_engine_NativeEngine_nativeSubmitInput(
-    JNIEnv *env, jobject /* thiz */, jfloat x, jfloat y, jint state, jfloat pressure,
-    jlong timestampMs) {
+        JNIEnv *env, jobject /* thiz */, jfloat x, jfloat y, jint state, jfloat pressure,
+        jlong timestampMs) {
     InputEvent event{
-        x, y, static_cast<InputEvent::State>(state), pressure, timestampMs,
+            x, y, static_cast<InputEvent::State>(state), pressure, timestampMs,
     };
     std::lock_guard<std::mutex> lock(gInputQueueMutex);
     gInputQueue.push_back(event);
@@ -98,14 +100,12 @@ Java_com_gesturecontrol_core_engine_NativeEngine_nativeSubmitInput(
 
 extern "C" JNIEXPORT void JNICALL
 Java_com_gesturecontrol_core_engine_NativeEngine_nativeSetBrushColor(
-    JNIEnv *env, jobject /* thiz */, jfloat r, jfloat g, jfloat b) {
-    gBrushColor[0] = r;
-    gBrushColor[1] = g;
-    gBrushColor[2] = b;
+        JNIEnv *env, jobject /* thiz */, jfloat r, jfloat g, jfloat b) {
+    gScene.setBrushColor(r, g, b);
 }
 
 extern "C" JNIEXPORT void JNICALL
 Java_com_gesturecontrol_core_engine_NativeEngine_nativeSetBrushSize(
-    JNIEnv *env, jobject /* thiz */, jfloat size) {
-    gBrushSize = size;
+        JNIEnv *env, jobject /* thiz */, jfloat size) {
+    gScene.setBrushSize(size);
 }

@@ -7,7 +7,9 @@ set(CMAKE_CXX_STANDARD_REQUIRED ON)
 add_library(gesture_canvas_core SHARED
     jni/native_lib.cpp
     render/EglContext.cpp
-    render/TriangleRenderer.cpp
+    render/StrokeRenderer.cpp
+    render/RibbonTessellator.cpp
+    scene/SceneGraph.cpp
 )
 
 target_include_directories(gesture_canvas_core PRIVATE

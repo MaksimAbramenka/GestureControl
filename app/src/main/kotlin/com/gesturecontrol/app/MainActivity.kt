@@ -32,12 +32,16 @@ import androidx.compose.ui.unit.dp
 import androidx.core.content.ContextCompat
 import androidx.lifecycle.compose.LocalLifecycleOwner
 import com.gesturecontrol.core.camera.CameraController
+import com.gesturecontrol.core.engine.NativeEngine
+import com.gesturecontrol.core.engine.submit
 import com.gesturecontrol.core.ml.HandLandmarkerAnalyzer
 import com.gesturecontrol.core.ml.classifier.GestureClassifier
 import com.gesturecontrol.core.ml.training.TrainingDataRecorder
 import com.gesturecontrol.core.ui.camera.DataCollectionControls
 import com.gesturecontrol.core.ui.camera.GestureCanvasScreen
+import com.gesturecontrol.core.ui.engine.NativeCanvasSurface
 import com.gesturecontrol.domain.gesture.GestureClass
+import com.gesturecontrol.domain.gesture.GestureInputMapper
 import com.gesturecontrol.domain.gesture.GestureSmoother
 import com.gesturecontrol.domain.gesture.HandFeatureExtractor
 import com.gesturecontrol.domain.hand.HandDetectionResult
@@ -100,6 +104,8 @@ private fun GestureCanvasHost() {
     val trainingDataRecorder = remember { TrainingDataRecorder(context) }
     val gestureClassifier = remember { GestureClassifier(context) }
     val gestureSmoother = remember { GestureSmoother() }
+    val gestureInputMapper = remember { GestureInputMapper() }
+    val nativeEngine = remember { NativeEngine() }
 
     DisposableEffect(cameraController, analyzer, gestureClassifier) {
         onDispose {
@@ -136,6 +142,13 @@ private fun GestureCanvasHost() {
             val classified = gestureClassifier.classify(features)
             currentGesture = gestureSmoother.smooth(classified.gestureClass)
         }
+
+        val commands = gestureInputMapper.map(
+            gestureClass = currentGesture,
+            fingertip = hand?.indexFingertip,
+            timestampMs = handDetectionResult.timestampMs,
+        )
+        commands.forEach { nativeEngine.submit(it) }
     }
 
     Box(modifier = Modifier.fillMaxSize()) {
@@ -144,6 +157,11 @@ private fun GestureCanvasHost() {
             handDetectionResult = handDetectionResult,
             currentGesture = currentGesture,
             mirrored = false,
+            modifier = Modifier.fillMaxSize(),
+        )
+
+        NativeCanvasSurface(
+            nativeEngine = nativeEngine,
             modifier = Modifier.fillMaxSize(),
         )
 

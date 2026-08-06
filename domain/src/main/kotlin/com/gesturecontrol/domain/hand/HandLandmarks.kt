@@ -11,6 +11,7 @@ data class HandLandmarks(
 ) {
     companion object {
         const val LANDMARK_COUNT = 21
+        private const val INDEX_FINGERTIP_INDEX = 8
     }
 
     init {
@@ -18,6 +19,9 @@ data class HandLandmarks(
             "A hand must have exactly $LANDMARK_COUNT landmarks, got ${points.size}"
         }
     }
+
+    val indexFingertip: NormalizedPoint
+        get() = points[INDEX_FINGERTIP_INDEX]
 }
 
 data class HandDetectionResult(
