@@ -1,6 +1,5 @@
 #include "scene/SceneGraph.h"
 
-#include <algorithm>
 #include <cmath>
 
 namespace gesture_canvas {
@@ -73,20 +72,35 @@ namespace gesture_canvas {
     }
 
     void SceneGraph::eraseNear(float x, float y) {
-        strokes_.erase(
-                std::remove_if(
-                        strokes_.begin(), strokes_.end(),
-                        [x, y](const Stroke &stroke) {
-                            for (const auto &point: stroke.points) {
-                                float dx = point.x - x;
-                                float dy = point.y - y;
-                                if (std::sqrt(dx * dx + dy * dy) <= kEraseRadius) {
-                                    return true;
-                                }
-                            }
-                            return false;
-                        }),
-                strokes_.end());
+        std::vector<Stroke> result;
+        result.reserve(strokes_.size());
+
+        for (const auto &stroke: strokes_) {
+            std::vector<Point2D> run;
+
+            auto flushRun = [&]() {
+                if (run.size() >= 2) {
+                    Stroke piece = stroke;
+                    piece.points = std::move(run);
+                    result.push_back(std::move(piece));
+                }
+                run.clear();
+            };
+
+            for (const auto &point: stroke.points) {
+                float dx = point.x - x;
+                float dy = point.y - y;
+                bool withinEraser = std::sqrt(dx * dx + dy * dy) <= kEraseRadius;
+                if (withinEraser) {
+                    flushRun();
+                } else {
+                    run.push_back(point);
+                }
+            }
+            flushRun();
+        }
+
+        strokes_ = std::move(result);
     }
 
 } // namespace gesture_canvas
