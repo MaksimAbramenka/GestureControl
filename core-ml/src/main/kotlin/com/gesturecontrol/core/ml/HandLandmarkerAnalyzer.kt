@@ -4,7 +4,6 @@ import android.content.Context
 import android.graphics.Bitmap
 import android.graphics.Matrix
 import android.os.SystemClock
-import android.util.Log
 import androidx.camera.core.ExperimentalGetImage
 import androidx.camera.core.ImageAnalysis
 import androidx.camera.core.ImageProxy
@@ -20,6 +19,7 @@ import com.google.mediapipe.tasks.vision.handlandmarker.HandLandmarker
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.SharedFlow
 import kotlinx.coroutines.flow.asSharedFlow
+import timber.log.Timber
 import java.io.Closeable
 
 /**
@@ -35,7 +35,6 @@ class HandLandmarkerAnalyzer(
     companion object {
         const val DEFAULT_MODEL_ASSET_PATH = "hand_landmarker.task"
         const val DEFAULT_NUM_HANDS = 2
-        private const val TAG = "HandLandmarkerAnalyzer"
     }
 
     private val _results = MutableSharedFlow<HandDetectionResult>(replay = 1, extraBufferCapacity = 1)
@@ -64,7 +63,7 @@ class HandLandmarkerAnalyzer(
                         fps = frameRateTracker.onFrame(result.timestampMs()),
                     ),
                 )
-            }.setErrorListener { error -> Log.e(TAG, "HandLandmarker error", error) }
+            }.setErrorListener { error -> Timber.e(error, "HandLandmarker error") }
             .build(),
     )
 

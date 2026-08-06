@@ -24,6 +24,7 @@ android {
 
     buildFeatures {
         compose = true
+        buildConfig = true
     }
 
     buildTypes {
@@ -52,6 +53,7 @@ dependencies {
     implementation(libs.lifecycle.runtime.compose)
     implementation(libs.activity.compose)
     implementation(libs.camerax.core)
+    implementation(libs.timber)
 
     implementation(platform(libs.compose.bom))
     implementation(libs.compose.ui)

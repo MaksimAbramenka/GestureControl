@@ -32,6 +32,7 @@ dependencies {
     implementation(libs.camerax.core)
     implementation(libs.core.ktx)
     implementation(libs.kotlinx.coroutines.android)
+    implementation(libs.timber)
 
     testImplementation(platform(libs.junit.bom))
     testImplementation(libs.junit.jupiter)
