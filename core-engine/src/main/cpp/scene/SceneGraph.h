@@ -4,6 +4,7 @@
 #include <vector>
 
 #include "input/InputEvent.h"
+#include "input/PointSmoother.h"
 #include "scene/Stroke.h"
 
 namespace gesture_canvas {
@@ -35,6 +36,7 @@ namespace gesture_canvas {
 
         std::vector<Stroke> strokes_;
         std::optional<Stroke> currentStroke_;
+        PointSmoother smoother_;
 
         float brushR_ = 0.1f;
         float brushG_ = 0.9f;

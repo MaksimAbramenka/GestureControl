@@ -47,3 +47,16 @@ fun NormalizedPoint.toViewportPoint(
         y = this.y * scaledImageHeight + offsetY,
     )
 }
+
+fun NormalizedPoint.toViewportNormalizedPoint(
+    imageDimensions: ImageDimensions,
+    viewportDimensions: ViewportDimensions,
+    mirrored: Boolean,
+): NormalizedPoint {
+    val viewportPoint = toViewportPoint(imageDimensions, viewportDimensions, mirrored)
+    return NormalizedPoint(
+        x = (viewportPoint.x / viewportDimensions.width).coerceIn(0f, 1f),
+        y = (viewportPoint.y / viewportDimensions.height).coerceIn(0f, 1f),
+        z = this.z,
+    )
+}

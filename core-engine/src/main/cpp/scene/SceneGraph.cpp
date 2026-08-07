@@ -15,26 +15,37 @@ namespace gesture_canvas {
     }
 
     void SceneGraph::submitInput(const InputEvent &event) {
+        float timestampSeconds = static_cast<float>(event.timestamp_ms) / 1000.0f;
+
         switch (event.state) {
-            case InputEvent::State::DRAW_START:
+            case InputEvent::State::DRAW_START: {
                 if (currentStroke_.has_value()) {
                     endStroke();
                 }
-                beginStroke(event.x, event.y);
+                smoother_.reset();
+                Point2D point = smoother_.smooth(event.x, event.y, timestampSeconds);
+                beginStroke(point.x, point.y);
                 break;
-            case InputEvent::State::DRAW_MOVE:
+            }
+            case InputEvent::State::DRAW_MOVE: {
                 if (currentStroke_.has_value()) {
-                    extendStroke(event.x, event.y);
+                    Point2D point = smoother_.smooth(event.x, event.y, timestampSeconds);
+                    extendStroke(point.x, point.y);
                 } else {
-                    beginStroke(event.x, event.y);
+                    smoother_.reset();
+                    Point2D point = smoother_.smooth(event.x, event.y, timestampSeconds);
+                    beginStroke(point.x, point.y);
                 }
                 break;
-            case InputEvent::State::DRAW_END:
+            }
+            case InputEvent::State::DRAW_END: {
                 if (currentStroke_.has_value()) {
-                    extendStroke(event.x, event.y);
+                    Point2D point = smoother_.smooth(event.x, event.y, timestampSeconds);
+                    extendStroke(point.x, point.y);
                     endStroke();
                 }
                 break;
+            }
             case InputEvent::State::ERASE:
                 eraseNear(event.x, event.y);
                 break;

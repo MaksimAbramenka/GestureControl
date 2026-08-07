@@ -17,10 +17,14 @@ enable_testing()
 
 add_executable(gesture_canvas_core_tests
     input/InputEventTest.cpp
+    input/OneEuroFilterTest.cpp
+    input/PointSmootherTest.cpp
     scene/SceneGraphTest.cpp
     render/RibbonTessellatorTest.cpp
     ../../main/cpp/scene/SceneGraph.cpp
     ../../main/cpp/render/RibbonTessellator.cpp
+    ../../main/cpp/input/OneEuroFilter.cpp
+    ../../main/cpp/input/PointSmoother.cpp
 )
 
 target_include_directories(gesture_canvas_core_tests PRIVATE

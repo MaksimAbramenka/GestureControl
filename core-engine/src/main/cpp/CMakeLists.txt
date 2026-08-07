@@ -10,6 +10,8 @@ add_library(gesture_canvas_core SHARED
     render/StrokeRenderer.cpp
     render/RibbonTessellator.cpp
     scene/SceneGraph.cpp
+    input/OneEuroFilter.cpp
+    input/PointSmoother.cpp
 )
 
 target_include_directories(gesture_canvas_core PRIVATE

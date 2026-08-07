@@ -109,6 +109,35 @@ class LandmarkViewportMapperTest {
         assertEquals(unmirrored.y, mirrored.y, tolerance)
     }
 
+    @Test
+    fun `viewport-normalized center maps to 0-5, 0-5 regardless of aspect mismatch`() {
+        val result = NormalizedPoint(x = 0.5f, y = 0.5f, z = 0f).toViewportNormalizedPoint(
+            imageDimensions = ImageDimensions(width = 640, height = 480),
+            viewportDimensions = ViewportDimensions(width = 1080f, height = 2280f),
+            mirrored = false,
+        )
+
+        assertEquals(0.5f, result.x, tolerance)
+        assertEquals(0.5f, result.y, tolerance)
+    }
+
+    @Test
+    fun `viewport-normalized point clamps to the edge when cropped out of view`() {
+        val leftEdge = NormalizedPoint(x = 0f, y = 0.5f, z = 0f).toViewportNormalizedPoint(
+            imageDimensions = ImageDimensions(width = 640, height = 480),
+            viewportDimensions = ViewportDimensions(width = 1080f, height = 2280f),
+            mirrored = false,
+        )
+        val rightEdge = NormalizedPoint(x = 1f, y = 0.5f, z = 0f).toViewportNormalizedPoint(
+            imageDimensions = ImageDimensions(width = 640, height = 480),
+            viewportDimensions = ViewportDimensions(width = 1080f, height = 2280f),
+            mirrored = false,
+        )
+
+        assertEquals(0f, leftEdge.x, tolerance)
+        assertEquals(1f, rightEdge.x, tolerance)
+    }
+
     @ParameterizedTest
     @MethodSource("invalidDimensions")
     fun `rejects non-positive dimensions`(

@@ -27,7 +27,9 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.unit.IntSize
 import androidx.compose.ui.unit.dp
 import androidx.core.content.ContextCompat
 import androidx.lifecycle.compose.LocalLifecycleOwner
@@ -37,6 +39,9 @@ import com.gesturecontrol.core.engine.submit
 import com.gesturecontrol.core.ml.HandLandmarkerAnalyzer
 import com.gesturecontrol.core.ml.classifier.GestureClassifier
 import com.gesturecontrol.core.ml.training.TrainingDataRecorder
+import com.gesturecontrol.core.ui.camera.BRUSH_COLOR_OPTIONS
+import com.gesturecontrol.core.ui.camera.BrushControls
+import com.gesturecontrol.core.ui.camera.BrushSizeOption
 import com.gesturecontrol.core.ui.camera.DataCollectionControls
 import com.gesturecontrol.core.ui.camera.GestureCanvasScreen
 import com.gesturecontrol.core.ui.engine.NativeCanvasSurface
@@ -46,6 +51,8 @@ import com.gesturecontrol.domain.gesture.GestureSmoother
 import com.gesturecontrol.domain.gesture.HandFeatureExtractor
 import com.gesturecontrol.domain.hand.HandDetectionResult
 import com.gesturecontrol.domain.hand.ImageDimensions
+import com.gesturecontrol.domain.hand.ViewportDimensions
+import com.gesturecontrol.domain.hand.toViewportNormalizedPoint
 
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -125,6 +132,9 @@ private fun GestureCanvasHost() {
     var selectedGestureClass by remember { mutableStateOf<GestureClass?>(null) }
     var recordedRowCount by remember { mutableIntStateOf(trainingDataRecorder.recordedRowCount) }
     var currentGesture by remember { mutableStateOf<GestureClass?>(null) }
+    var selectedBrushColor by remember { mutableStateOf(BRUSH_COLOR_OPTIONS.first()) }
+    var selectedBrushSize by remember { mutableStateOf(BrushSizeOption.MEDIUM) }
+    var viewportSize by remember { mutableStateOf(IntSize.Zero) }
 
     SideEffect {
         val hand = handDetectionResult.hands.firstOrNull()
@@ -143,15 +153,35 @@ private fun GestureCanvasHost() {
             currentGesture = gestureSmoother.smooth(classified.gestureClass)
         }
 
+        // The camera preview is center-cropped to fill the screen, so the raw camera-image-
+        // normalized fingertip position must be mapped through the same crop before it's used
+        // as a drawing position, or it drifts from the visible fingertip away from center.
+        val fingertip = if (hand != null && viewportSize.width > 0 && viewportSize.height > 0) {
+            hand.indexFingertip.toViewportNormalizedPoint(
+                imageDimensions = handDetectionResult.imageDimensions,
+                viewportDimensions = ViewportDimensions(
+                    width = viewportSize.width.toFloat(),
+                    height = viewportSize.height.toFloat(),
+                ),
+                mirrored = false,
+            )
+        } else {
+            null
+        }
+
         val commands = gestureInputMapper.map(
             gestureClass = currentGesture,
-            fingertip = hand?.indexFingertip,
+            fingertip = fingertip,
             timestampMs = handDetectionResult.timestampMs,
         )
         commands.forEach { nativeEngine.submit(it) }
     }
 
-    Box(modifier = Modifier.fillMaxSize()) {
+    Box(
+        modifier = Modifier
+            .fillMaxSize()
+            .onSizeChanged { viewportSize = it },
+    ) {
         GestureCanvasScreen(
             surfaceRequest = surfaceRequest,
             handDetectionResult = handDetectionResult,
@@ -171,6 +201,22 @@ private fun GestureCanvasHost() {
             onSelectGestureClass = { selectedGestureClass = it },
             modifier = Modifier
                 .align(Alignment.BottomCenter)
+                .padding(16.dp),
+        )
+
+        BrushControls(
+            selectedColor = selectedBrushColor,
+            selectedSize = selectedBrushSize,
+            onSelectColor = { option ->
+                selectedBrushColor = option
+                nativeEngine.nativeSetBrushColor(option.r, option.g, option.b)
+            },
+            onSelectSize = { option ->
+                selectedBrushSize = option
+                nativeEngine.nativeSetBrushSize(option.size)
+            },
+            modifier = Modifier
+                .align(Alignment.TopStart)
                 .padding(16.dp),
         )
     }
