@@ -135,6 +135,7 @@ private fun GestureCanvasHost() {
     var selectedBrushColor by remember { mutableStateOf(BRUSH_COLOR_OPTIONS.first()) }
     var selectedBrushSize by remember { mutableStateOf(BrushSizeOption.MEDIUM) }
     var viewportSize by remember { mutableStateOf(IntSize.Zero) }
+    var showCameraPreview by remember { mutableStateOf(true) }
 
     SideEffect {
         val hand = handDetectionResult.hands.firstOrNull()
@@ -187,6 +188,7 @@ private fun GestureCanvasHost() {
             handDetectionResult = handDetectionResult,
             currentGesture = currentGesture,
             mirrored = false,
+            showCameraPreview = showCameraPreview,
             modifier = Modifier.fillMaxSize(),
         )
 
@@ -219,6 +221,15 @@ private fun GestureCanvasHost() {
                 .align(Alignment.TopStart)
                 .padding(16.dp),
         )
+
+        Button(
+            onClick = { showCameraPreview = !showCameraPreview },
+            modifier = Modifier
+                .align(Alignment.TopEnd)
+                .padding(top = 48.dp, end = 16.dp),
+        ) {
+            Text(if (showCameraPreview) "Hide camera" else "Show camera")
+        }
     }
 }
 
