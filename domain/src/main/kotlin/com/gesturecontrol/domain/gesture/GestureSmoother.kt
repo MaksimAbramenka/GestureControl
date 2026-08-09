@@ -1,6 +1,6 @@
 package com.gesturecontrol.domain.gesture
 
-class GestureSmoother(private val windowSize: Int = 5) {
+class GestureSmoother(private val windowSize: Int = 3) {
     private val recentClasses = ArrayDeque<GestureClass>()
 
     fun smooth(gestureClass: GestureClass): GestureClass {
