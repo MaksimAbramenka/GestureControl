@@ -1,8 +1,11 @@
 package com.gesturecontrol.core.ml
 
+import com.gesturecontrol.domain.hand.Handedness
 import com.gesturecontrol.domain.hand.ImageDimensions
+import com.google.mediapipe.tasks.components.containers.Category
 import com.google.mediapipe.tasks.components.containers.NormalizedLandmark
 import org.junit.jupiter.api.Assertions.assertEquals
+import org.junit.jupiter.api.Assertions.assertNull
 import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.assertThrows
@@ -15,13 +18,17 @@ class HandLandmarksMapperTest {
         NormalizedLandmark.create(i / 100f, i / 200f, i / 300f)
     }
 
+    private fun fakeHandedness(label: String): List<Category> = listOf(Category.create(0.99f, 0, label, label))
+
     @Test
     fun `maps no detected hands to an empty result`() {
         val result = HandLandmarksMapper.toDomain(
             mediapipeHands = emptyList(),
+            mediapipeHandedness = emptyList(),
             timestampMs = 1234L,
             imageDimensions = someImageDimensions,
             fps = someFps,
+            mirrored = false,
         )
 
         assertTrue(result.hands.isEmpty())
@@ -36,9 +43,11 @@ class HandLandmarksMapperTest {
 
         val result = HandLandmarksMapper.toDomain(
             mediapipeHands = listOf(mediapipeHand),
+            mediapipeHandedness = listOf(fakeHandedness("Right")),
             timestampMs = 42L,
             imageDimensions = someImageDimensions,
             fps = someFps,
+            mirrored = false,
         )
 
         assertEquals(1, result.hands.size)
@@ -58,9 +67,11 @@ class HandLandmarksMapperTest {
 
         val result = HandLandmarksMapper.toDomain(
             mediapipeHands = listOf(firstHand, secondHand),
+            mediapipeHandedness = listOf(fakeHandedness("Right"), fakeHandedness("Left")),
             timestampMs = 0L,
             imageDimensions = someImageDimensions,
             fps = someFps,
+            mirrored = false,
         )
 
         assertEquals(2, result.hands.size)
@@ -73,10 +84,54 @@ class HandLandmarksMapperTest {
         assertThrows<IllegalArgumentException> {
             HandLandmarksMapper.toDomain(
                 mediapipeHands = listOf(fakeHandLandmarks(count = 5)),
+                mediapipeHandedness = listOf(fakeHandedness("Right")),
                 timestampMs = 0L,
                 imageDimensions = someImageDimensions,
                 fps = someFps,
+                mirrored = false,
             )
         }
+    }
+
+    @Test
+    fun `unmirrored input maps MediaPipe's handedness label directly`() {
+        val result = HandLandmarksMapper.toDomain(
+            mediapipeHands = listOf(fakeHandLandmarks()),
+            mediapipeHandedness = listOf(fakeHandedness("Right")),
+            timestampMs = 0L,
+            imageDimensions = someImageDimensions,
+            fps = someFps,
+            mirrored = false,
+        )
+
+        assertEquals(Handedness.RIGHT, result.hands.single().handedness)
+    }
+
+    @Test
+    fun `mirrored input flips MediaPipe's handedness label`() {
+        val result = HandLandmarksMapper.toDomain(
+            mediapipeHands = listOf(fakeHandLandmarks()),
+            mediapipeHandedness = listOf(fakeHandedness("Right")),
+            timestampMs = 0L,
+            imageDimensions = someImageDimensions,
+            fps = someFps,
+            mirrored = true,
+        )
+
+        assertEquals(Handedness.LEFT, result.hands.single().handedness)
+    }
+
+    @Test
+    fun `an unrecognized or missing handedness label maps to null`() {
+        val result = HandLandmarksMapper.toDomain(
+            mediapipeHands = listOf(fakeHandLandmarks()),
+            mediapipeHandedness = listOf(emptyList()),
+            timestampMs = 0L,
+            imageDimensions = someImageDimensions,
+            fps = someFps,
+            mirrored = false,
+        )
+
+        assertNull(result.hands.single().handedness)
     }
 }

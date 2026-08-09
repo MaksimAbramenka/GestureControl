@@ -1,5 +1,10 @@
 package com.gesturecontrol.domain.hand
 
+enum class Handedness {
+    LEFT,
+    RIGHT,
+}
+
 data class NormalizedPoint(
     val x: Float,
     val y: Float,
@@ -8,6 +13,7 @@ data class NormalizedPoint(
 
 data class HandLandmarks(
     val points: List<NormalizedPoint>,
+    val handedness: Handedness? = null,
 ) {
     companion object {
         const val LANDMARK_COUNT = 21

@@ -58,9 +58,11 @@ class HandLandmarkerAnalyzer(
                 _results.tryEmit(
                     HandLandmarksMapper.toDomain(
                         mediapipeHands = result.landmarks(),
+                        mediapipeHandedness = result.handedness(),
                         timestampMs = result.timestampMs(),
                         imageDimensions = latestImageDimensions,
                         fps = frameRateTracker.onFrame(result.timestampMs()),
+                        mirrored = isFrontCamera,
                     ),
                 )
             }.setErrorListener { error -> Timber.e(error, "HandLandmarker error") }
