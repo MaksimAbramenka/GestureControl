@@ -2,9 +2,9 @@
 
 A gesture-driven drawing canvas for Android: raise a hand in front of the camera, pinch to draw, hold up two fingers to erase — no touch input at all. An on-device ML pipeline (MediaPipe → a custom-trained LiteRT classifier) drives a hand-written C++/OpenGL native rendering core, wired together over JNI.
 
-<video src="media/demo.mp4" controls width="320"></video>
+![Demo](media/demo.gif)
 
-*(If the player above doesn't render, watch directly: [media/demo.mp4](media/demo.mp4).)*
+*(Full-quality video: [media/demo.mp4](media/demo.mp4).)*
 
 ## What it does
 
