@@ -14,23 +14,35 @@ import androidx.compose.ui.unit.dp
 import com.gesturecontrol.domain.gesture.GestureClass
 import com.gesturecontrol.domain.hand.HandDetectionResult
 
+enum class CameraPreviewMode {
+    FULLSCREEN,
+    PIP,
+    HIDDEN,
+}
+
 @Composable
 fun GestureCanvasScreen(
     surfaceRequest: SurfaceRequest?,
     handDetectionResult: HandDetectionResult,
     currentGesture: GestureClass?,
     mirrored: Boolean,
-    showCameraPreview: Boolean = true,
+    cameraPreviewMode: CameraPreviewMode = CameraPreviewMode.FULLSCREEN,
     modifier: Modifier = Modifier,
 ) {
     Box(modifier = modifier.fillMaxSize()) {
-        if (showCameraPreview) {
+        if (cameraPreviewMode == CameraPreviewMode.FULLSCREEN) {
             surfaceRequest?.let { request ->
                 CameraXViewfinder(
                     surfaceRequest = request,
                     modifier = Modifier.fillMaxSize(),
                 )
             }
+
+            HandLandmarkOverlay(
+                handDetectionResult = handDetectionResult,
+                mirrored = mirrored,
+                modifier = Modifier.fillMaxSize(),
+            )
         } else {
             Box(
                 modifier = Modifier
@@ -38,12 +50,6 @@ fun GestureCanvasScreen(
                     .background(Color.White),
             )
         }
-
-        HandLandmarkOverlay(
-            handDetectionResult = handDetectionResult,
-            mirrored = mirrored,
-            modifier = Modifier.fillMaxSize(),
-        )
 
         FpsLabel(
             fps = handDetectionResult.fps,
@@ -58,5 +64,16 @@ fun GestureCanvasScreen(
                 .align(Alignment.TopEnd)
                 .padding(8.dp),
         )
+
+        if (cameraPreviewMode == CameraPreviewMode.PIP) {
+            CameraPreviewPip(
+                surfaceRequest = surfaceRequest,
+                handDetectionResult = handDetectionResult,
+                mirrored = mirrored,
+                modifier = Modifier
+                    .align(Alignment.BottomStart)
+                    .padding(16.dp),
+            )
+        }
     }
 }

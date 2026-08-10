@@ -46,6 +46,7 @@ import com.gesturecontrol.core.ml.training.TrainingDataRecorder
 import com.gesturecontrol.core.ui.camera.BRUSH_COLOR_OPTIONS
 import com.gesturecontrol.core.ui.camera.BrushControls
 import com.gesturecontrol.core.ui.camera.BrushSizeOption
+import com.gesturecontrol.core.ui.camera.CameraPreviewMode
 import com.gesturecontrol.core.ui.camera.DataCollectionControls
 import com.gesturecontrol.core.ui.camera.GestureCanvasScreen
 import com.gesturecontrol.core.ui.engine.NativeCanvasSurface
@@ -199,12 +200,18 @@ private fun GestureControlHost() {
             .fillMaxSize()
             .onSizeChanged { viewportSize = it },
     ) {
+        val cameraPreviewMode = when {
+            appMode == AppMode.DATA_COLLECTION -> CameraPreviewMode.FULLSCREEN
+            showCameraPreview -> CameraPreviewMode.PIP
+            else -> CameraPreviewMode.HIDDEN
+        }
+
         GestureCanvasScreen(
             surfaceRequest = surfaceRequest,
             handDetectionResult = handDetectionResult,
             currentGesture = currentGesture,
             mirrored = false,
-            showCameraPreview = appMode == AppMode.DATA_COLLECTION || showCameraPreview,
+            cameraPreviewMode = cameraPreviewMode,
             modifier = Modifier.fillMaxSize(),
         )
 
