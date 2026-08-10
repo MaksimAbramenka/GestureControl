@@ -17,3 +17,6 @@ captures/
 *.so
 *.o
 *.log
+
+ml/venv/
+ml/__pycache__/

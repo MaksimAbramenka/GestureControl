@@ -69,8 +69,9 @@ graph BT
 
 - **Landmarker:** MediaPipe `HandLandmarker`, Tasks API, `RunningMode.LIVE_STREAM`, GPU delegate.
 - **Feature vector:** all 21 hand landmarks (x, y, z) translated relative to the wrist and scaled by the wrist→middle-finger-MCP distance, giving a 63-float vector that's invariant to hand size and distance from the camera.
-- **Classifier:** a small MLP — `63 → Dense(32, ReLU) → Dense(16, ReLU) → Dense(4) → Softmax` — trained in Colab, exported to LiteRT with fp16-quantized weights. The bundled model is **8,164 bytes**.
+- **Classifier:** a small MLP — `63 → Dense(32, ReLU) → Dense(16, ReLU) → Dense(4) → Softmax` — exported to LiteRT with fp16-quantized weights. The bundled model is **8,164 bytes**.
 - **Training data:** 12,800 self-recorded examples across the four classes (DRAW 3,063 / ERASE 3,195 / HOVER 3,164 / IDLE 3,378), covering both hands and multiple recording sessions with varied lighting and hand distance.
+- **Train your own:** the app's Data collection mode records labeled examples straight from your own hand (with live per-hand progress tracking), and [ml/train.py](ml/train.py) reproduces this exact training/export pipeline locally — see [ml/README.md](ml/README.md).
 - **Smoothing:** majority-vote debounce over the last 5 classified frames before a gesture state change is treated as real, plus a separate 1€ filter (Casiez et al.) smoothing the drawn point positions themselves — chosen over a flat exponential moving average specifically because it adapts: heavy smoothing while the hand is nearly still, minimal added lag during a fast stroke.
 - **Runtime:** LiteRT `CompiledModel` API, CPU accelerator — runs via the XNNPACK delegate on-device.
 
