@@ -29,6 +29,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.IntSize
@@ -46,10 +47,12 @@ import com.gesturecontrol.core.ml.training.TrainingDataRecorder
 import com.gesturecontrol.core.ui.camera.BRUSH_COLOR_OPTIONS
 import com.gesturecontrol.core.ui.camera.BrushControls
 import com.gesturecontrol.core.ui.camera.BrushSizeOption
-import com.gesturecontrol.core.ui.camera.CameraPreviewMode
 import com.gesturecontrol.core.ui.camera.DataCollectionControls
+import com.gesturecontrol.core.ui.camera.DraggableCameraPreview
 import com.gesturecontrol.core.ui.camera.GestureCanvasScreen
 import com.gesturecontrol.core.ui.camera.GestureCursorOverlay
+import com.gesturecontrol.core.ui.camera.PIP_ASPECT_RATIO
+import com.gesturecontrol.core.ui.camera.PIP_DEFAULT_SIZE_FRACTION
 import com.gesturecontrol.core.ui.engine.NativeCanvasSurface
 import com.gesturecontrol.domain.gesture.GestureClass
 import com.gesturecontrol.domain.gesture.GestureInputMapper
@@ -150,6 +153,8 @@ private fun GestureControlHost() {
     var viewportSize by remember { mutableStateOf(IntSize.Zero) }
     var showCameraPreview by remember { mutableStateOf(true) }
     var cursorPosition by remember { mutableStateOf<NormalizedPoint?>(null) }
+    var pipOffset by remember { mutableStateOf<Offset?>(null) }
+    var pipSizeFraction by remember { mutableStateOf(PIP_DEFAULT_SIZE_FRACTION) }
 
     SideEffect {
         val hand = handDetectionResult.hands.firstOrNull()
@@ -192,8 +197,15 @@ private fun GestureControlHost() {
             }
             cursorPosition = cursorSmoother.smooth(fingertip)
 
+            // Drawing/erasing is suppressed while the fingertip is over the PiP camera preview,
+            // so the preview can be interacted with (or just sit there) without leaving a stroke.
+            val isFingertipOverPip = fingertip != null &&
+                showCameraPreview &&
+                isPointOverPip(fingertip, viewportSize, pipOffset, pipSizeFraction)
+            val effectiveGestureClass = if (isFingertipOverPip) GestureClass.HOVER else currentGesture
+
             val commands = gestureInputMapper.map(
-                gestureClass = currentGesture,
+                gestureClass = effectiveGestureClass,
                 fingertip = fingertip,
                 timestampMs = handDetectionResult.timestampMs,
             )
@@ -208,18 +220,12 @@ private fun GestureControlHost() {
             .fillMaxSize()
             .onSizeChanged { viewportSize = it },
     ) {
-        val cameraPreviewMode = when {
-            appMode == AppMode.DATA_COLLECTION -> CameraPreviewMode.FULLSCREEN
-            showCameraPreview -> CameraPreviewMode.PIP
-            else -> CameraPreviewMode.HIDDEN
-        }
-
         GestureCanvasScreen(
             surfaceRequest = surfaceRequest,
             handDetectionResult = handDetectionResult,
             currentGesture = currentGesture,
             mirrored = false,
-            cameraPreviewMode = cameraPreviewMode,
+            showFullscreenCamera = appMode == AppMode.DATA_COLLECTION,
             modifier = Modifier.fillMaxSize(),
         )
 
@@ -292,6 +298,20 @@ private fun GestureControlHost() {
         ) {
             Text(if (appMode == AppMode.DRAWING) "Data collection" else "Drawing")
         }
+
+        if (appMode == AppMode.DRAWING && showCameraPreview) {
+            DraggableCameraPreview(
+                surfaceRequest = surfaceRequest,
+                handDetectionResult = handDetectionResult,
+                mirrored = false,
+                viewportSizePx = viewportSize,
+                offset = pipOffset,
+                onOffsetChange = { pipOffset = it },
+                sizeFraction = pipSizeFraction,
+                onSizeFractionChange = { pipSizeFraction = it },
+                modifier = Modifier.fillMaxSize(),
+            )
+        }
     }
 }
 
@@ -305,6 +325,21 @@ private fun CameraPermissionRationale(onRequestPermission: () -> Unit) {
             }
         }
     }
+}
+
+private fun isPointOverPip(
+    point: NormalizedPoint,
+    viewportSize: IntSize,
+    pipOffset: Offset?,
+    pipSizeFraction: Float,
+): Boolean {
+    if (pipOffset == null) return false
+
+    val width = pipSizeFraction * viewportSize.width
+    val height = width * PIP_ASPECT_RATIO
+    val x = point.x * viewportSize.width
+    val y = point.y * viewportSize.height
+    return x in pipOffset.x..(pipOffset.x + width) && y in pipOffset.y..(pipOffset.y + height)
 }
 
 private fun shareTrainingDataCsv(context: Context) {

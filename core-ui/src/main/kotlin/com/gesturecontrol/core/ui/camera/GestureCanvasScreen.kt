@@ -14,23 +14,17 @@ import androidx.compose.ui.unit.dp
 import com.gesturecontrol.domain.gesture.GestureClass
 import com.gesturecontrol.domain.hand.HandDetectionResult
 
-enum class CameraPreviewMode {
-    FULLSCREEN,
-    PIP,
-    HIDDEN,
-}
-
 @Composable
 fun GestureCanvasScreen(
     surfaceRequest: SurfaceRequest?,
     handDetectionResult: HandDetectionResult,
     currentGesture: GestureClass?,
     mirrored: Boolean,
-    cameraPreviewMode: CameraPreviewMode = CameraPreviewMode.FULLSCREEN,
+    showFullscreenCamera: Boolean = true,
     modifier: Modifier = Modifier,
 ) {
     Box(modifier = modifier.fillMaxSize()) {
-        if (cameraPreviewMode == CameraPreviewMode.FULLSCREEN) {
+        if (showFullscreenCamera) {
             surfaceRequest?.let { request ->
                 CameraXViewfinder(
                     surfaceRequest = request,
@@ -64,16 +58,5 @@ fun GestureCanvasScreen(
                 .align(Alignment.TopEnd)
                 .padding(8.dp),
         )
-
-        if (cameraPreviewMode == CameraPreviewMode.PIP) {
-            CameraPreviewPip(
-                surfaceRequest = surfaceRequest,
-                handDetectionResult = handDetectionResult,
-                mirrored = mirrored,
-                modifier = Modifier
-                    .align(Alignment.BottomStart)
-                    .padding(16.dp),
-            )
-        }
     }
 }
