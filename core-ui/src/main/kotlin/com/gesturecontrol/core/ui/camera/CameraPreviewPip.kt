@@ -2,6 +2,7 @@ package com.gesturecontrol.core.ui.camera
 
 import androidx.camera.compose.CameraXViewfinder
 import androidx.camera.core.SurfaceRequest
+import androidx.camera.viewfinder.core.ImplementationMode
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Box
@@ -35,6 +36,7 @@ fun CameraPreviewPip(
         surfaceRequest?.let { request ->
             CameraXViewfinder(
                 surfaceRequest = request,
+                implementationMode = ImplementationMode.EMBEDDED,
                 modifier = Modifier.size(width = PipWidth, height = PipHeight),
             )
         }

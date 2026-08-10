@@ -49,6 +49,7 @@ import com.gesturecontrol.core.ui.camera.BrushSizeOption
 import com.gesturecontrol.core.ui.camera.CameraPreviewMode
 import com.gesturecontrol.core.ui.camera.DataCollectionControls
 import com.gesturecontrol.core.ui.camera.GestureCanvasScreen
+import com.gesturecontrol.core.ui.camera.GestureCursorOverlay
 import com.gesturecontrol.core.ui.engine.NativeCanvasSurface
 import com.gesturecontrol.domain.gesture.GestureClass
 import com.gesturecontrol.domain.gesture.GestureInputMapper
@@ -56,6 +57,7 @@ import com.gesturecontrol.domain.gesture.GestureSmoother
 import com.gesturecontrol.domain.gesture.HandFeatureExtractor
 import com.gesturecontrol.domain.hand.HandDetectionResult
 import com.gesturecontrol.domain.hand.ImageDimensions
+import com.gesturecontrol.domain.hand.NormalizedPoint
 import com.gesturecontrol.domain.hand.ViewportDimensions
 import com.gesturecontrol.domain.hand.toViewportNormalizedPoint
 import java.io.File
@@ -145,6 +147,7 @@ private fun GestureControlHost() {
     var selectedBrushSize by remember { mutableStateOf(BrushSizeOption.MEDIUM) }
     var viewportSize by remember { mutableStateOf(IntSize.Zero) }
     var showCameraPreview by remember { mutableStateOf(true) }
+    var cursorPosition by remember { mutableStateOf<NormalizedPoint?>(null) }
 
     SideEffect {
         val hand = handDetectionResult.hands.firstOrNull()
@@ -185,6 +188,7 @@ private fun GestureControlHost() {
             } else {
                 null
             }
+            cursorPosition = fingertip
 
             val commands = gestureInputMapper.map(
                 gestureClass = currentGesture,
@@ -192,6 +196,8 @@ private fun GestureControlHost() {
                 timestampMs = handDetectionResult.timestampMs,
             )
             commands.forEach { nativeEngine.submit(it) }
+        } else {
+            cursorPosition = null
         }
     }
 
@@ -218,6 +224,13 @@ private fun GestureControlHost() {
         if (appMode == AppMode.DRAWING) {
             NativeCanvasSurface(
                 nativeEngine = nativeEngine,
+                modifier = Modifier.fillMaxSize(),
+            )
+
+            GestureCursorOverlay(
+                fingertip = cursorPosition,
+                gestureClass = currentGesture,
+                brushColor = selectedBrushColor.composeColor,
                 modifier = Modifier.fillMaxSize(),
             )
 
