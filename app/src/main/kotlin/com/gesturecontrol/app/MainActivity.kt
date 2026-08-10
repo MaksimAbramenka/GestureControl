@@ -58,6 +58,7 @@ import com.gesturecontrol.domain.gesture.HandFeatureExtractor
 import com.gesturecontrol.domain.hand.HandDetectionResult
 import com.gesturecontrol.domain.hand.ImageDimensions
 import com.gesturecontrol.domain.hand.NormalizedPoint
+import com.gesturecontrol.domain.hand.PositionSmoother
 import com.gesturecontrol.domain.hand.ViewportDimensions
 import com.gesturecontrol.domain.hand.toViewportNormalizedPoint
 import java.io.File
@@ -121,6 +122,7 @@ private fun GestureControlHost() {
     val gestureClassifier = remember { GestureClassifier(context) }
     val gestureSmoother = remember { GestureSmoother() }
     val gestureInputMapper = remember { GestureInputMapper() }
+    val cursorSmoother = remember { PositionSmoother() }
     val nativeEngine = remember { NativeEngine() }
 
     DisposableEffect(cameraController, analyzer, gestureClassifier) {
@@ -188,7 +190,7 @@ private fun GestureControlHost() {
             } else {
                 null
             }
-            cursorPosition = fingertip
+            cursorPosition = cursorSmoother.smooth(fingertip)
 
             val commands = gestureInputMapper.map(
                 gestureClass = currentGesture,
@@ -197,7 +199,7 @@ private fun GestureControlHost() {
             )
             commands.forEach { nativeEngine.submit(it) }
         } else {
-            cursorPosition = null
+            cursorPosition = cursorSmoother.smooth(null)
         }
     }
 
