@@ -26,10 +26,13 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.layout.LayoutCoordinates
+import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.IntSize
@@ -48,6 +51,7 @@ import com.gesturecontrol.core.ui.camera.BRUSH_COLOR_OPTIONS
 import com.gesturecontrol.core.ui.camera.BrushColorOption
 import com.gesturecontrol.core.ui.camera.BrushControls
 import com.gesturecontrol.core.ui.camera.BrushSizeOption
+import com.gesturecontrol.core.ui.camera.CarouselController
 import com.gesturecontrol.core.ui.camera.DataCollectionControls
 import com.gesturecontrol.core.ui.camera.DraggableCameraPreview
 import com.gesturecontrol.core.ui.camera.GestureCanvasScreen
@@ -66,6 +70,9 @@ import com.gesturecontrol.domain.hand.PositionSmoother
 import com.gesturecontrol.domain.hand.ViewportDimensions
 import com.gesturecontrol.domain.hand.toViewportNormalizedPoint
 import com.gesturecontrol.domain.training.RecordingProgress
+import com.gesturecontrol.domain.ui.DwellZone
+import com.gesturecontrol.domain.ui.EdgeDwellStepper
+import kotlinx.coroutines.launch
 import java.io.File
 
 class MainActivity : ComponentActivity() {
@@ -129,6 +136,8 @@ private fun GestureControlHost() {
     val gestureInputMapper = remember { GestureInputMapper() }
     val cursorSmoother = remember { PositionSmoother() }
     val nativeEngine = remember { NativeEngine() }
+    val edgeDwellStepper = remember { EdgeDwellStepper() }
+    val coroutineScope = rememberCoroutineScope()
 
     DisposableEffect(cameraController, analyzer, gestureClassifier) {
         onDispose {
@@ -157,6 +166,11 @@ private fun GestureControlHost() {
     var cursorPosition by remember { mutableStateOf<NormalizedPoint?>(null) }
     var pipOffset by remember { mutableStateOf<Offset?>(null) }
     var pipSizeFraction by remember { mutableStateOf(PIP_DEFAULT_SIZE_FRACTION) }
+    var rootCoordinates by remember { mutableStateOf<LayoutCoordinates?>(null) }
+    var colorCarouselController by remember { mutableStateOf<CarouselController?>(null) }
+    var sizeCarouselController by remember { mutableStateOf<CarouselController?>(null) }
+    var colorCarouselActiveEdge by remember { mutableStateOf<Int?>(null) }
+    var sizeCarouselActiveEdge by remember { mutableStateOf<Int?>(null) }
     val lastProcessedTimestampMs = remember { longArrayOf(-1L) }
 
     fun selectBrushColor(option: BrushColorOption) {
@@ -221,6 +235,25 @@ private fun GestureControlHost() {
             }
             cursorPosition = cursorSmoother.smooth(fingertip)
 
+            // Hovering the fingertip over a carousel's left/right edge band for a beat steps its
+            // selection, since reaching a small on-screen picker with an in-air gesture like a
+            // fling is unreliable -- direction and precision are much easier to get right this
+            // way, entirely from cursor position with no gesture classification involved.
+            val activeEdge = resolveActiveCarouselEdge(
+                cursorPosition = cursorPosition,
+                viewportSize = viewportSize,
+                rootCoordinates = rootCoordinates,
+                colorCarouselController = colorCarouselController,
+                sizeCarouselController = sizeCarouselController,
+            )
+            colorCarouselActiveEdge = activeEdge?.takeIf { it.controller === colorCarouselController }?.direction
+            sizeCarouselActiveEdge = activeEdge?.takeIf { it.controller === sizeCarouselController }?.direction
+            if (edgeDwellStepper.onFrame(activeEdge?.zone, handDetectionResult.timestampMs)) {
+                val controller = activeEdge!!.controller
+                val direction = activeEdge.direction
+                coroutineScope.launch { controller.step(direction) }
+            }
+
             // Drawing/erasing is suppressed while the fingertip is over the PiP camera preview,
             // so the preview can be interacted with (or just sit there) without leaving a stroke.
             val isFingertipOverPip = fingertip != null &&
@@ -236,13 +269,16 @@ private fun GestureControlHost() {
             commands.forEach { nativeEngine.submit(it) }
         } else {
             cursorPosition = cursorSmoother.smooth(null)
+            colorCarouselActiveEdge = null
+            sizeCarouselActiveEdge = null
         }
     }
 
     Box(
         modifier = Modifier
             .fillMaxSize()
-            .onSizeChanged { viewportSize = it },
+            .onSizeChanged { viewportSize = it }
+            .onGloballyPositioned { rootCoordinates = it },
     ) {
         GestureCanvasScreen(
             surfaceRequest = surfaceRequest,
@@ -271,6 +307,10 @@ private fun GestureControlHost() {
                 selectedSize = selectedBrushSize,
                 onSelectColor = ::selectBrushColor,
                 onSelectSize = ::selectBrushSize,
+                onColorCarouselControllerReady = { colorCarouselController = it },
+                onSizeCarouselControllerReady = { sizeCarouselController = it },
+                colorCarouselActiveEdge = colorCarouselActiveEdge,
+                sizeCarouselActiveEdge = sizeCarouselActiveEdge,
                 modifier = Modifier
                     .align(Alignment.TopStart)
                     .padding(16.dp),
@@ -344,6 +384,31 @@ private fun CameraPermissionRationale(onRequestPermission: () -> Unit) {
             }
         }
     }
+}
+
+private data class ActiveCarouselEdge(
+    val controller: CarouselController,
+    val direction: Int,
+    val zone: DwellZone,
+)
+
+private fun resolveActiveCarouselEdge(
+    cursorPosition: NormalizedPoint?,
+    viewportSize: IntSize,
+    rootCoordinates: LayoutCoordinates?,
+    colorCarouselController: CarouselController?,
+    sizeCarouselController: CarouselController?,
+): ActiveCarouselEdge? {
+    if (cursorPosition == null || rootCoordinates == null) return null
+
+    val pointPx = Offset(cursorPosition.x * viewportSize.width, cursorPosition.y * viewportSize.height)
+    colorCarouselController?.edgeZoneAt(rootCoordinates, pointPx)?.let { direction ->
+        return ActiveCarouselEdge(colorCarouselController, direction, DwellZone("color:$direction"))
+    }
+    sizeCarouselController?.edgeZoneAt(rootCoordinates, pointPx)?.let { direction ->
+        return ActiveCarouselEdge(sizeCarouselController, direction, DwellZone("size:$direction"))
+    }
+    return null
 }
 
 private fun isPointOverPip(

@@ -22,17 +22,23 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.layout.LayoutCoordinates
+import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.toSize
 import kotlinx.coroutines.flow.filter
 import kotlinx.coroutines.launch
 import kotlin.math.abs
@@ -73,6 +79,10 @@ fun BrushControls(
     onSelectColor: (BrushColorOption) -> Unit,
     onSelectSize: (BrushSizeOption) -> Unit,
     modifier: Modifier = Modifier,
+    onColorCarouselControllerReady: (CarouselController) -> Unit = {},
+    onSizeCarouselControllerReady: (CarouselController) -> Unit = {},
+    colorCarouselActiveEdge: Int? = null,
+    sizeCarouselActiveEdge: Int? = null,
 ) {
     Column(
         modifier = modifier
@@ -80,7 +90,13 @@ fun BrushControls(
             .padding(8.dp),
         horizontalAlignment = Alignment.CenterHorizontally,
     ) {
-        SelectionCarousel(BRUSH_COLOR_OPTIONS, selectedColor, onSelectColor) { option ->
+        SelectionCarousel(
+            BRUSH_COLOR_OPTIONS,
+            selectedColor,
+            onSelectColor,
+            onColorCarouselControllerReady,
+            colorCarouselActiveEdge,
+        ) { option ->
             Box(
                 modifier = Modifier
                     .size(30.dp)
@@ -88,7 +104,13 @@ fun BrushControls(
                     .background(option.composeColor),
             )
         }
-        SelectionCarousel(BrushSizeOption.entries, selectedSize, onSelectSize) { option ->
+        SelectionCarousel(
+            BrushSizeOption.entries,
+            selectedSize,
+            onSelectSize,
+            onSizeCarouselControllerReady,
+            sizeCarouselActiveEdge,
+        ) { option ->
             Column(
                 horizontalAlignment = Alignment.CenterHorizontally,
                 verticalArrangement = Arrangement.spacedBy(2.dp),
@@ -105,13 +127,55 @@ fun BrushControls(
     }
 }
 
+/** Lets an owner outside [SelectionCarousel] hit-test a screen position against its current
+ * on-screen edge bands and command it to step the selection by one item, for gesture-driven
+ * input (dwelling over an edge) that can't reach the carousel through normal touch/scroll. */
+class CarouselController internal constructor(
+    private val listState: LazyListState,
+    private val itemCount: Int,
+) {
+    companion object {
+        private const val EDGE_ZONE_FRACTION = 0.3f
+    }
+
+    internal var coordinates: LayoutCoordinates? = null
+
+    /** -1 if [pointInRoot] is over this carousel's left edge band, +1 for the right edge band,
+     * or null if it's outside the carousel entirely or in the dead middle zone. */
+    fun edgeZoneAt(root: LayoutCoordinates, pointInRoot: Offset): Int? {
+        val local = coordinates ?: return null
+        if (!local.isAttached || !root.isAttached) return null
+
+        val topLeft = root.localPositionOf(local, Offset.Zero)
+        val rect = Rect(topLeft, local.size.toSize())
+        if (!rect.contains(pointInRoot)) return null
+
+        val fraction = (pointInRoot.x - rect.left) / rect.width
+        return when {
+            fraction <= EDGE_ZONE_FRACTION -> -1
+            fraction >= 1f - EDGE_ZONE_FRACTION -> 1
+            else -> null
+        }
+    }
+
+    /** [indexDelta] is typically +1 (next item) or -1 (previous item). */
+    suspend fun step(indexDelta: Int) {
+        val current = centerMostVisibleIndex(listState) ?: return
+        val next = (current + indexDelta).coerceIn(0, itemCount - 1)
+        if (next != current) listState.centerOnItem(next)
+    }
+}
+
 /** A horizontally snapping picker: the centered item is the selection, reachable by dragging,
- * flinging, or tapping any item directly to jump straight to it. */
+ * flinging, or tapping any item directly to jump straight to it. [activeEdge] highlights the
+ * left (-1) or right (+1) chevron to reflect a caller-driven dwell-to-step interaction. */
 @Composable
 private fun <T> SelectionCarousel(
     items: List<T>,
     selected: T,
     onSelect: (T) -> Unit,
+    onControllerReady: (CarouselController) -> Unit,
+    activeEdge: Int?,
     itemContent: @Composable BoxScope.(T) -> Unit,
 ) {
     val density = LocalDensity.current
@@ -121,8 +185,13 @@ private fun <T> SelectionCarousel(
         initialFirstVisibleItemScrollOffset = (items.indexOf(selected) * itemPx).roundToInt(),
     )
     val coroutineScope = rememberCoroutineScope()
+    val controller = remember(listState) { CarouselController(listState, items.size) }
+    LaunchedEffect(controller) { onControllerReady(controller) }
 
-    Box(contentAlignment = Alignment.Center) {
+    Box(
+        contentAlignment = Alignment.Center,
+        modifier = Modifier.onGloballyPositioned { controller.coordinates = it },
+    ) {
         LazyRow(
             state = listState,
             flingBehavior = rememberSnapFlingBehavior(listState, SnapPosition.Center),
@@ -155,6 +224,19 @@ private fun <T> SelectionCarousel(
                 .size(SelectionRingSize)
                 .clip(CircleShape)
                 .border(2.dp, Color.White, CircleShape),
+        )
+
+        Text(
+            text = "‹",
+            color = Color.White.copy(alpha = if (activeEdge == -1) 1f else 0.25f),
+            fontWeight = FontWeight.Bold,
+            modifier = Modifier.align(Alignment.CenterStart),
+        )
+        Text(
+            text = "›",
+            color = Color.White.copy(alpha = if (activeEdge == 1) 1f else 0.25f),
+            fontWeight = FontWeight.Bold,
+            modifier = Modifier.align(Alignment.CenterEnd),
         )
     }
 
