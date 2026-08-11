@@ -3,22 +3,40 @@ package com.gesturecontrol.core.ui.camera
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.gestures.animateScrollBy
+import androidx.compose.foundation.gestures.snapping.SnapPosition
+import androidx.compose.foundation.gestures.snapping.rememberSnapFlingBehavior
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxScope
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.lazy.LazyListState
+import androidx.compose.foundation.lazy.LazyRow
+import androidx.compose.foundation.lazy.itemsIndexed
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.CircleShape
-import androidx.compose.material3.Button
-import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
+import kotlinx.coroutines.flow.filter
+import kotlinx.coroutines.launch
+import kotlin.math.abs
+import kotlin.math.roundToInt
 
 data class BrushColorOption(
     val label: String,
@@ -34,14 +52,19 @@ val BRUSH_COLOR_OPTIONS = listOf(
     BrushColorOption("Red", 1.0f, 0.2f, 0.2f),
     BrushColorOption("Green", 0.2f, 1.0f, 0.3f),
     BrushColorOption("Yellow", 1.0f, 0.9f, 0.1f),
-    BrushColorOption("White", 1.0f, 1.0f, 1.0f),
+    // Not white -- the canvas background is white, so a white stroke would be invisible.
+    BrushColorOption("Black", 0.0f, 0.0f, 0.0f),
 )
 
-enum class BrushSizeOption(val label: String, val size: Float) {
-    SMALL("S", 0.008f),
-    MEDIUM("M", 0.015f),
-    LARGE("L", 0.03f),
+enum class BrushSizeOption(val label: String, val size: Float, val dotSize: Dp) {
+    SMALL("S", 0.008f, 10.dp),
+    MEDIUM("M", 0.015f, 18.dp),
+    LARGE("L", 0.03f, 26.dp),
 }
+
+private val CarouselItemSize = 56.dp
+private val CarouselTrackWidth = 200.dp
+private val SelectionRingSize = 46.dp
 
 @Composable
 fun BrushControls(
@@ -57,35 +80,115 @@ fun BrushControls(
             .padding(8.dp),
         horizontalAlignment = Alignment.CenterHorizontally,
     ) {
-        Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-            BRUSH_COLOR_OPTIONS.forEach { option ->
-                val isSelected = option == selectedColor
+        SelectionCarousel(BRUSH_COLOR_OPTIONS, selectedColor, onSelectColor) { option ->
+            Box(
+                modifier = Modifier
+                    .size(30.dp)
+                    .clip(CircleShape)
+                    .background(option.composeColor),
+            )
+        }
+        SelectionCarousel(BrushSizeOption.entries, selectedSize, onSelectSize) { option ->
+            Column(
+                horizontalAlignment = Alignment.CenterHorizontally,
+                verticalArrangement = Arrangement.spacedBy(2.dp),
+            ) {
+                Text(text = option.label, color = Color.White, fontWeight = FontWeight.Bold)
                 Box(
                     modifier = Modifier
-                        .size(28.dp)
+                        .size(option.dotSize)
                         .clip(CircleShape)
-                        .background(option.composeColor)
-                        .border(
-                            width = if (isSelected) 2.dp else 0.dp,
-                            color = Color.White,
-                            shape = CircleShape,
-                        )
-                        .clickable { onSelectColor(option) },
+                        .background(Color.White),
                 )
             }
         }
-        Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
-            BrushSizeOption.entries.forEach { option ->
-                val isSelected = option == selectedSize
-                Button(
-                    onClick = { onSelectSize(option) },
-                    colors = ButtonDefaults.buttonColors(
-                        containerColor = if (isSelected) Color.Red else Color.DarkGray,
-                    ),
+    }
+}
+
+/** A horizontally snapping picker: the centered item is the selection, reachable by dragging,
+ * flinging, or tapping any item directly to jump straight to it. */
+@Composable
+private fun <T> SelectionCarousel(
+    items: List<T>,
+    selected: T,
+    onSelect: (T) -> Unit,
+    itemContent: @Composable BoxScope.(T) -> Unit,
+) {
+    val density = LocalDensity.current
+    val itemPx = with(density) { CarouselItemSize.toPx() }
+    val sidePadding = (CarouselTrackWidth - CarouselItemSize) / 2
+    val listState = rememberLazyListState(
+        initialFirstVisibleItemScrollOffset = (items.indexOf(selected) * itemPx).roundToInt(),
+    )
+    val coroutineScope = rememberCoroutineScope()
+
+    Box(contentAlignment = Alignment.Center) {
+        LazyRow(
+            state = listState,
+            flingBehavior = rememberSnapFlingBehavior(listState, SnapPosition.Center),
+            contentPadding = PaddingValues(horizontal = sidePadding),
+            modifier = Modifier.width(CarouselTrackWidth),
+        ) {
+            itemsIndexed(items) { index, item ->
+                Box(
+                    modifier = Modifier
+                        .size(CarouselItemSize)
+                        .graphicsLayer {
+                            val (scale, itemAlpha) = centerEmphasis(listState, index, itemPx)
+                            scaleX = scale
+                            scaleY = scale
+                            alpha = itemAlpha
+                        }
+                        .clickable {
+                            onSelect(item)
+                            coroutineScope.launch { listState.centerOnItem(index) }
+                        },
+                    contentAlignment = Alignment.Center,
                 ) {
-                    Text(option.label)
+                    itemContent(item)
                 }
             }
         }
+
+        Box(
+            modifier = Modifier
+                .size(SelectionRingSize)
+                .clip(CircleShape)
+                .border(2.dp, Color.White, CircleShape),
+        )
     }
+
+    LaunchedEffect(listState) {
+        snapshotFlow { listState.isScrollInProgress }
+            .filter { !it }
+            .collect {
+                centerMostVisibleIndex(listState)?.let { onSelect(items[it]) }
+            }
+    }
+}
+
+private fun centerEmphasis(state: LazyListState, index: Int, itemSizePx: Float): Pair<Float, Float> {
+    val info = state.layoutInfo
+    val item = info.visibleItemsInfo.firstOrNull { it.index == index } ?: return 0.7f to 0.4f
+    val viewportCenter = (info.viewportStartOffset + info.viewportEndOffset) / 2f
+    val itemCenter = item.offset + item.size / 2f
+    val falloff = (1f - abs(itemCenter - viewportCenter) / itemSizePx).coerceIn(0f, 1f)
+    return (0.7f + 0.35f * falloff) to (0.4f + 0.6f * falloff)
+}
+
+private fun centerMostVisibleIndex(state: LazyListState): Int? {
+    val info = state.layoutInfo
+    val viewportCenter = (info.viewportStartOffset + info.viewportEndOffset) / 2
+    return info.visibleItemsInfo.minByOrNull { abs((it.offset + it.size / 2) - viewportCenter) }?.index
+}
+
+private suspend fun LazyListState.centerOnItem(index: Int) {
+    val item = layoutInfo.visibleItemsInfo.firstOrNull { it.index == index }
+    if (item == null) {
+        animateScrollToItem(index)
+        return
+    }
+    val viewportCenter = (layoutInfo.viewportStartOffset + layoutInfo.viewportEndOffset) / 2
+    val itemCenter = item.offset + item.size / 2
+    animateScrollBy((itemCenter - viewportCenter).toFloat())
 }

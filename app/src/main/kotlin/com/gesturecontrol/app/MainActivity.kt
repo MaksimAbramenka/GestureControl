@@ -45,6 +45,7 @@ import com.gesturecontrol.core.ml.classifier.GestureClassifier
 import com.gesturecontrol.core.ml.training.RecordingProgressStore
 import com.gesturecontrol.core.ml.training.TrainingDataRecorder
 import com.gesturecontrol.core.ui.camera.BRUSH_COLOR_OPTIONS
+import com.gesturecontrol.core.ui.camera.BrushColorOption
 import com.gesturecontrol.core.ui.camera.BrushControls
 import com.gesturecontrol.core.ui.camera.BrushSizeOption
 import com.gesturecontrol.core.ui.camera.DataCollectionControls
@@ -156,6 +157,16 @@ private fun GestureControlHost() {
     var pipOffset by remember { mutableStateOf<Offset?>(null) }
     var pipSizeFraction by remember { mutableStateOf(PIP_DEFAULT_SIZE_FRACTION) }
 
+    fun selectBrushColor(option: BrushColorOption) {
+        selectedBrushColor = option
+        nativeEngine.nativeSetBrushColor(option.r, option.g, option.b)
+    }
+
+    fun selectBrushSize(option: BrushSizeOption) {
+        selectedBrushSize = option
+        nativeEngine.nativeSetBrushSize(option.size)
+    }
+
     SideEffect {
         val hand = handDetectionResult.hands.firstOrNull()
         if (hand == null) {
@@ -245,14 +256,8 @@ private fun GestureControlHost() {
             BrushControls(
                 selectedColor = selectedBrushColor,
                 selectedSize = selectedBrushSize,
-                onSelectColor = { option ->
-                    selectedBrushColor = option
-                    nativeEngine.nativeSetBrushColor(option.r, option.g, option.b)
-                },
-                onSelectSize = { option ->
-                    selectedBrushSize = option
-                    nativeEngine.nativeSetBrushSize(option.size)
-                },
+                onSelectColor = ::selectBrushColor,
+                onSelectSize = ::selectBrushSize,
                 modifier = Modifier
                     .align(Alignment.TopStart)
                     .padding(16.dp),
