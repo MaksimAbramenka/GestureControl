@@ -7,8 +7,8 @@ import org.junit.jupiter.api.assertThrows
 class GestureClassifierOutputTest {
     @Test
     fun `picks the class with the highest probability`() {
-        // order matches GestureClass entries: IDLE, HOVER, DRAW, ERASE
-        val probabilities = floatArrayOf(0.1f, 0.2f, 0.6f, 0.1f)
+        // order matches GestureClass entries: IDLE, HOVER, DRAW, ERASE, FLING
+        val probabilities = floatArrayOf(0.1f, 0.1f, 0.6f, 0.1f, 0.1f)
 
         val result = GestureClassifierOutput.interpret(probabilities)
 
@@ -18,7 +18,7 @@ class GestureClassifierOutputTest {
 
     @Test
     fun `picks IDLE when it has the highest probability`() {
-        val probabilities = floatArrayOf(0.7f, 0.1f, 0.1f, 0.1f)
+        val probabilities = floatArrayOf(0.7f, 0.1f, 0.1f, 0.05f, 0.05f)
 
         val result = GestureClassifierOutput.interpret(probabilities)
 
@@ -28,11 +28,20 @@ class GestureClassifierOutputTest {
 
     @Test
     fun `picks ERASE when it has the highest probability`() {
-        val probabilities = floatArrayOf(0.1f, 0.1f, 0.1f, 0.7f)
+        val probabilities = floatArrayOf(0.1f, 0.1f, 0.1f, 0.6f, 0.1f)
 
         val result = GestureClassifierOutput.interpret(probabilities)
 
         assertEquals(GestureClass.ERASE, result.gestureClass)
+    }
+
+    @Test
+    fun `picks FLING when it has the highest probability`() {
+        val probabilities = floatArrayOf(0.1f, 0.1f, 0.1f, 0.1f, 0.6f)
+
+        val result = GestureClassifierOutput.interpret(probabilities)
+
+        assertEquals(GestureClass.FLING, result.gestureClass)
     }
 
     @Test

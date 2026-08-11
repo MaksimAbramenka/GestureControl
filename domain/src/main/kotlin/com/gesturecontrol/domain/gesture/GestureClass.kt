@@ -5,4 +5,5 @@ enum class GestureClass {
     HOVER,
     DRAW,
     ERASE,
+    FLING,
 }

@@ -2,6 +2,7 @@ package com.gesturecontrol.core.ml.classifier
 
 import android.content.Context
 import com.gesturecontrol.domain.gesture.ClassifiedGesture
+import com.gesturecontrol.domain.gesture.GestureClass
 import com.gesturecontrol.domain.gesture.GestureClassifierOutput
 import com.google.ai.edge.litert.Accelerator
 import com.google.ai.edge.litert.CompiledModel
@@ -34,6 +35,10 @@ class GestureClassifier(
         inputBuffers[0].writeFloat(features)
         model.run(inputBuffers, outputBuffers)
         val probabilities = outputBuffers[0].readFloat()
+
+        if (probabilities.size != GestureClass.entries.size) {
+            return ClassifiedGesture(GestureClass.IDLE, 0f)
+        }
         return GestureClassifierOutput.interpret(probabilities)
     }
 

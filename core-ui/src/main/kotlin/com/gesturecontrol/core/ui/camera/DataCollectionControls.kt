@@ -1,11 +1,14 @@
 package com.gesturecontrol.core.ui.camera
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.MaterialTheme
@@ -41,7 +44,10 @@ fun DataCollectionControls(
             color = Color.White,
             style = MaterialTheme.typography.labelMedium,
         )
-        Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+        Row(
+            horizontalArrangement = Arrangement.spacedBy(4.dp),
+            modifier = Modifier.horizontalScroll(rememberScrollState()),
+        ) {
             GestureClass.entries.forEach { gestureClass ->
                 val isSelected = gestureClass == selectedGestureClass
                 Button(
@@ -49,6 +55,7 @@ fun DataCollectionControls(
                     colors = ButtonDefaults.buttonColors(
                         containerColor = if (isSelected) Color.Red else Color.DarkGray,
                     ),
+                    contentPadding = PaddingValues(horizontal = 12.dp, vertical = 8.dp),
                 ) {
                     Text(gestureClass.name)
                 }
