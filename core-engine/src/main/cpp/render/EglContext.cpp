@@ -26,7 +26,18 @@ bool EglContext::init(ANativeWindow *window) {
         return false;
     }
 
-    const EGLint configAttribs[] = {
+    const EGLint configAttribsMsaa[] = {
+        EGL_RENDERABLE_TYPE, EGL_OPENGL_ES3_BIT,
+        EGL_SURFACE_TYPE, EGL_WINDOW_BIT,
+        EGL_RED_SIZE, 8,
+        EGL_GREEN_SIZE, 8,
+        EGL_BLUE_SIZE, 8,
+        EGL_ALPHA_SIZE, 8,
+        EGL_SAMPLE_BUFFERS, 1,
+        EGL_SAMPLES, 4,
+        EGL_NONE,
+    };
+    const EGLint configAttribsNoMsaa[] = {
         EGL_RENDERABLE_TYPE, EGL_OPENGL_ES3_BIT,
         EGL_SURFACE_TYPE, EGL_WINDOW_BIT,
         EGL_RED_SIZE, 8,
@@ -37,7 +48,13 @@ bool EglContext::init(ANativeWindow *window) {
     };
     EGLConfig config;
     EGLint numConfigs = 0;
-    if (!eglChooseConfig(display_, configAttribs, &config, 1, &numConfigs) || numConfigs == 0) {
+    bool haveConfig =
+        eglChooseConfig(display_, configAttribsMsaa, &config, 1, &numConfigs) && numConfigs > 0;
+    if (!haveConfig) {
+        haveConfig =
+            eglChooseConfig(display_, configAttribsNoMsaa, &config, 1, &numConfigs) && numConfigs > 0;
+    }
+    if (!haveConfig) {
         LOGE("eglChooseConfig failed");
         return false;
     }
