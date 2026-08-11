@@ -32,4 +32,11 @@ class TrainingDataRecorder(context: Context, fileName: String = DEFAULT_FILE_NAM
             rowCount.incrementAndGet()
         }
     }
+
+    fun clear() {
+        writeExecutor.execute {
+            file.writeText(TrainingDataCsvFormatter.header(HandFeatureExtractor.FEATURE_VECTOR_SIZE) + "\n")
+            rowCount.set(0)
+        }
+    }
 }

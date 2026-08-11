@@ -41,4 +41,10 @@ class RecordingProgressStore(context: Context, fileName: String = DEFAULT_FILE_N
             file.writeText(lines.joinToString("\n"))
         }
     }
+
+    fun clear() {
+        writeExecutor.execute {
+            file.writeText("")
+        }
+    }
 }

@@ -65,6 +65,7 @@ import com.gesturecontrol.domain.hand.NormalizedPoint
 import com.gesturecontrol.domain.hand.PositionSmoother
 import com.gesturecontrol.domain.hand.ViewportDimensions
 import com.gesturecontrol.domain.hand.toViewportNormalizedPoint
+import com.gesturecontrol.domain.training.RecordingProgress
 import java.io.File
 
 class MainActivity : ComponentActivity() {
@@ -156,6 +157,7 @@ private fun GestureControlHost() {
     var cursorPosition by remember { mutableStateOf<NormalizedPoint?>(null) }
     var pipOffset by remember { mutableStateOf<Offset?>(null) }
     var pipSizeFraction by remember { mutableStateOf(PIP_DEFAULT_SIZE_FRACTION) }
+    val lastProcessedTimestampMs = remember { longArrayOf(-1L) }
 
     fun selectBrushColor(option: BrushColorOption) {
         selectedBrushColor = option
@@ -167,7 +169,18 @@ private fun GestureControlHost() {
         nativeEngine.nativeSetBrushSize(option.size)
     }
 
+    fun clearTrainingData() {
+        trainingDataRecorder.clear()
+        recordingProgressStore.clear()
+        recordedRowCount = 0
+        recordingProgress = RecordingProgress()
+    }
+
     SideEffect {
+        if (handDetectionResult.timestampMs == lastProcessedTimestampMs[0]) return@SideEffect
+
+        lastProcessedTimestampMs[0] = handDetectionResult.timestampMs
+
         val hand = handDetectionResult.hands.firstOrNull()
         if (hand == null) {
             currentGesture = null
@@ -280,6 +293,7 @@ private fun GestureControlHost() {
                 recordingProgress = recordingProgress,
                 onSelectGestureClass = { selectedGestureClass = it },
                 onShareCsv = { shareTrainingDataCsv(context) },
+                onClearData = ::clearTrainingData,
                 modifier = Modifier
                     .align(Alignment.BottomCenter)
                     .padding(16.dp),

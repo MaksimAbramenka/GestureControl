@@ -40,18 +40,30 @@ def load_dataset(csv_path: Path) -> tuple[np.ndarray, np.ndarray]:
 
     features: list[list[float]] = []
     labels: list[int] = []
+    seen_rows: set[tuple[str, tuple[float, ...]]] = set()
+    duplicate_count = 0
     with open(csv_path, newline="") as f:
         reader = csv.DictReader(f)
         feature_columns = [name for name in (reader.fieldnames or []) if name != "label"]
         for i, row in enumerate(reader, start=1):
             if row["label"] not in GESTURE_CLASSES:
                 raise ValueError(f"Unknown label '{row['label']}' -- expected one of {GESTURE_CLASSES}")
-            features.append([float(row[col]) for col in feature_columns])
-            labels.append(GESTURE_CLASSES.index(row["label"]))
+
+            row_features = tuple(float(row[col]) for col in feature_columns)
+            dedup_key = (row["label"], row_features)
+            if dedup_key in seen_rows:
+                duplicate_count += 1
+            else:
+                seen_rows.add(dedup_key)
+                features.append(list(row_features))
+                labels.append(GESTURE_CLASSES.index(row["label"]))
+
             if i % 500 == 0 or i == total_rows:
                 percent = 100 * i / total_rows if total_rows else 100
                 print(f"\r  Reading rows... {i}/{total_rows} ({percent:.0f}%)", end="", flush=True)
     print()
+    if duplicate_count:
+        print(f"  Dropped {duplicate_count} exact-duplicate rows ({len(features)} unique rows kept)")
 
     return np.array(features, dtype=np.float32), np.array(labels, dtype=np.int64)
 

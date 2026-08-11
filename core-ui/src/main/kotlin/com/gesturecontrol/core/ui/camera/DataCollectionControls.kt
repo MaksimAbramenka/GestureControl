@@ -9,11 +9,17 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
@@ -31,8 +37,11 @@ fun DataCollectionControls(
     recordingProgress: RecordingProgress,
     onSelectGestureClass: (GestureClass?) -> Unit,
     onShareCsv: () -> Unit,
+    onClearData: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
+    var showClearConfirmation by remember { mutableStateOf(false) }
+
     Column(
         modifier = modifier
             .background(Color.Black.copy(alpha = 0.5f))
@@ -81,11 +90,42 @@ fun DataCollectionControls(
                 )
             }
         }
-        if (recordingProgress.isComplete(MINIMUM_FRAMES_PER_HAND)) {
-            Button(onClick = onShareCsv) {
-                Text("Share CSV")
+        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            if (recordingProgress.isComplete(MINIMUM_FRAMES_PER_HAND)) {
+                Button(onClick = onShareCsv) {
+                    Text("Share CSV")
+                }
+            }
+            Button(
+                onClick = { showClearConfirmation = true },
+                colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF8B0000)),
+            ) {
+                Text("Clear data")
             }
         }
+    }
+
+    if (showClearConfirmation) {
+        AlertDialog(
+            onDismissRequest = { showClearConfirmation = false },
+            title = { Text("Clear all recorded data?") },
+            text = {
+                Text("This permanently deletes every recorded frame, for every gesture and hand. This can't be undone.")
+            },
+            confirmButton = {
+                TextButton(onClick = {
+                    showClearConfirmation = false
+                    onClearData()
+                }) {
+                    Text("Clear")
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { showClearConfirmation = false }) {
+                    Text("Cancel")
+                }
+            },
+        )
     }
 }
 
