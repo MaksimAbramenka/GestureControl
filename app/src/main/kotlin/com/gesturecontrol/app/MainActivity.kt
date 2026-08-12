@@ -4,7 +4,11 @@ import android.Manifest
 import android.content.Context
 import android.content.Intent
 import android.content.pm.PackageManager
+import android.graphics.Bitmap
+import android.graphics.Canvas
+import android.graphics.Color
 import android.os.Bundle
+import android.os.Environment
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.compose.setContent
@@ -39,6 +43,7 @@ import androidx.compose.ui.unit.IntSize
 import androidx.compose.ui.unit.dp
 import androidx.core.content.ContextCompat
 import androidx.core.content.FileProvider
+import androidx.core.graphics.createBitmap
 import androidx.lifecycle.compose.LocalLifecycleOwner
 import com.gesturecontrol.core.camera.CameraController
 import com.gesturecontrol.core.engine.NativeEngine
@@ -72,8 +77,11 @@ import com.gesturecontrol.domain.hand.toViewportNormalizedPoint
 import com.gesturecontrol.domain.training.RecordingProgress
 import com.gesturecontrol.domain.ui.DwellZone
 import com.gesturecontrol.domain.ui.EdgeDwellStepper
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import java.io.File
+import java.io.FileOutputStream
 
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -188,6 +196,19 @@ private fun GestureControlHost() {
         recordingProgressStore.clear()
         recordedRowCount = 0
         recordingProgress = RecordingProgress()
+    }
+
+    fun saveAndShareDrawing() {
+        val strokes = nativeEngine.captureSnapshot(viewportSize.width, viewportSize.height) ?: return
+        val bitmap = flattenOnWhite(strokes)
+        strokes.recycle()
+        coroutineScope.launch(Dispatchers.IO) {
+            val file = writeDrawingPng(context, bitmap)
+            bitmap.recycle()
+            if (file != null) {
+                withContext(Dispatchers.Main) { shareDrawing(context, file) }
+            }
+        }
     }
 
     SideEffect {
@@ -324,6 +345,15 @@ private fun GestureControlHost() {
             ) {
                 Text(if (showCameraPreview) "Hide camera" else "Show camera")
             }
+
+            Button(
+                onClick = ::saveAndShareDrawing,
+                modifier = Modifier
+                    .align(Alignment.TopEnd)
+                    .padding(top = 112.dp, end = 16.dp),
+            ) {
+                Text("Share drawing")
+            }
         }
 
         if (appMode == AppMode.DATA_COLLECTION) {
@@ -424,6 +454,35 @@ private fun isPointOverPip(
     val x = point.x * viewportSize.width
     val y = point.y * viewportSize.height
     return x in pipOffset.x..(pipOffset.x + width) && y in pipOffset.y..(pipOffset.y + height)
+}
+
+private fun flattenOnWhite(strokes: Bitmap): Bitmap {
+    val flattened = createBitmap(strokes.width, strokes.height)
+    Canvas(flattened).apply {
+        drawColor(Color.WHITE)
+        drawBitmap(strokes, 0f, 0f, null)
+    }
+    return flattened
+}
+
+private fun writeDrawingPng(context: Context, bitmap: Bitmap): File? {
+    val picturesDir = context.getExternalFilesDir(Environment.DIRECTORY_PICTURES) ?: return null
+    picturesDir.mkdirs()
+    val file = File(picturesDir, "drawing_${System.currentTimeMillis()}.png")
+    return runCatching {
+        FileOutputStream(file).use { out -> bitmap.compress(Bitmap.CompressFormat.PNG, 100, out) }
+        file
+    }.getOrNull()
+}
+
+private fun shareDrawing(context: Context, file: File) {
+    val uri = FileProvider.getUriForFile(context, "${context.packageName}.fileprovider", file)
+    val intent = Intent(Intent.ACTION_SEND).apply {
+        type = "image/png"
+        putExtra(Intent.EXTRA_STREAM, uri)
+        addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+    }
+    context.startActivity(Intent.createChooser(intent, "Share drawing"))
 }
 
 private fun shareTrainingDataCsv(context: Context) {

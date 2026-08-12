@@ -1,6 +1,8 @@
 package com.gesturecontrol.core.engine
 
+import android.graphics.Bitmap
 import android.view.Surface
+import java.nio.ByteBuffer
 
 class NativeEngine {
     companion object {
@@ -28,4 +30,16 @@ class NativeEngine {
     )
 
     external fun nativeSetBrushSize(size: Float)
+
+    external fun nativeCaptureSnapshot(width: Int, height: Int): ByteArray?
+
+    fun captureSnapshot(width: Int, height: Int): Bitmap? {
+        if (width <= 0 || height <= 0) return null
+
+        val pixels = nativeCaptureSnapshot(width, height) ?: return null
+
+        return Bitmap.createBitmap(width, height, Bitmap.Config.ARGB_8888).apply {
+            copyPixelsFromBuffer(ByteBuffer.wrap(pixels))
+        }
+    }
 }
