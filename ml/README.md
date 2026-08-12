@@ -9,13 +9,14 @@ same export settings.
 
 1. Open the app, switch to **Data collection** mode.
 2. Select a gesture class, hold the pose in front of the camera, and watch the per-hand counters
-   climb. Do this for both hands, for all four classes (`IDLE`, `HOVER`, `DRAW`, `ERASE`).
+   climb. Do this for both hands, for all five classes (`IDLE`, `HOVER`, `DRAW`, `ERASE`, `FLING`).
 3. Vary lighting, hand distance from the camera, and background across a couple of separate
    sittings rather than one continuous session — a classifier trained on one lighting setup in one
    room is a real risk for "works on the dev phone, falls apart elsewhere."
 4. Once every (gesture, hand) combination hits its threshold, a **Share CSV** button unlocks. Use
    it to send `training_data.csv` to your computer (email, cloud drive, AirDrop, whatever's
-   convenient).
+   convenient). A **Clear data** button is also available if you want to start a recording session
+   from scratch rather than append to what's already on the device.
 
 ## 2. Set up the training environment
 
@@ -38,7 +39,7 @@ This will:
 
 - Load the CSV and print the class balance (watch for one class dominating — rebalance or record
   more of the underrepresented ones if so).
-- Train a small MLP (`63 → Dense(32, ReLU) → Dense(16, ReLU) → Dense(4) → Softmax`) with an
+- Train a small MLP (`63 → Dense(32, ReLU) → Dense(16, ReLU) → Dense(5) → Softmax`) with an
   80/20 train/validation split and early stopping.
 - Print a classification report and confusion matrix on the validation set — check this before
   trusting the model. A confused class pair here will show up as "one gesture keeps getting
@@ -69,11 +70,14 @@ trusting it — the validation metrics above are a signal, not a guarantee.
 
 ## Notes
 
-- The four gesture classes and their label strings must exactly match
-  `domain/gesture/GestureClass.kt`'s enum declaration order (`IDLE`, `HOVER`, `DRAW`, `ERASE`).
-  `train.py` hardcodes this order and will refuse to train on a CSV with an unrecognized label,
-  but if you ever add/reorder gesture classes in the app, update `GESTURE_CLASSES` in `train.py`
-  to match.
+- The five gesture classes and their label strings must exactly match
+  `domain/gesture/GestureClass.kt`'s enum declaration order (`IDLE`, `HOVER`, `DRAW`, `ERASE`,
+  `FLING`). `train.py` hardcodes this order and will refuse to train on a CSV with an unrecognized
+  label, but if you ever add/reorder gesture classes in the app, update `GESTURE_CLASSES` in
+  `train.py` to match.
+- `load_dataset()` also drops exact-duplicate rows before training (label + full feature vector
+  match) and prints how many it found — this catches accidental re-recording bugs rather than
+  silently letting duplicates skew the class balance.
 - If a gesture's *shape* changes (not just needing more data), discard that class's old rows
   rather than blending old and new shapes under one label — two different hand poses sharing a
   label will poison that class's decision boundary. This happened for real during development; see
