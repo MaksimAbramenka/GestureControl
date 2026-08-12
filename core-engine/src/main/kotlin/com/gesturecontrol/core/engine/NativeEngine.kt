@@ -31,6 +31,8 @@ class NativeEngine {
 
     external fun nativeSetBrushSize(size: Float)
 
+    external fun nativeClearCanvas()
+
     external fun nativeCaptureSnapshot(width: Int, height: Int): ByteArray?
 
     fun captureSnapshot(width: Int, height: Int): Bitmap? {

@@ -13,14 +13,25 @@ import androidx.activity.ComponentActivity
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.compose.setContent
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.width
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Delete
+import androidx.compose.material.icons.filled.Share
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
+import androidx.compose.material3.FilledIconButton
+import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButtonDefaults
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
@@ -39,6 +50,7 @@ import androidx.compose.ui.layout.LayoutCoordinates
 import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.IntSize
 import androidx.compose.ui.unit.dp
 import androidx.core.content.ContextCompat
@@ -82,6 +94,8 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import java.io.File
 import java.io.FileOutputStream
+
+private val CameraToggleButtonWidth = 112.dp
 
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -171,6 +185,7 @@ private fun GestureControlHost() {
     var selectedBrushSize by remember { mutableStateOf(BrushSizeOption.MEDIUM) }
     var viewportSize by remember { mutableStateOf(IntSize.Zero) }
     var showCameraPreview by remember { mutableStateOf(true) }
+    var showClearCanvasConfirmation by remember { mutableStateOf(false) }
     var cursorPosition by remember { mutableStateOf<NormalizedPoint?>(null) }
     var pipOffset by remember { mutableStateOf<Offset?>(null) }
     var pipSizeFraction by remember { mutableStateOf(PIP_DEFAULT_SIZE_FRACTION) }
@@ -334,26 +349,62 @@ private fun GestureControlHost() {
                 sizeCarouselActiveEdge = sizeCarouselActiveEdge,
                 modifier = Modifier
                     .align(Alignment.TopStart)
-                    .padding(16.dp),
+                    .padding(top = 40.dp, start = 16.dp),
             )
 
             Button(
                 onClick = { showCameraPreview = !showCameraPreview },
                 modifier = Modifier
                     .align(Alignment.TopEnd)
-                    .padding(top = 48.dp, end = 16.dp),
+                    .padding(top = 40.dp, end = 16.dp)
+                    .width(CameraToggleButtonWidth),
             ) {
-                Text(if (showCameraPreview) "Hide camera" else "Show camera")
+                Text(
+                    text = if (showCameraPreview) "Hide\ncamera" else "Show\ncamera",
+                    textAlign = TextAlign.Center,
+                )
             }
 
-            Button(
-                onClick = ::saveAndShareDrawing,
+            Row(
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
                 modifier = Modifier
                     .align(Alignment.TopEnd)
                     .padding(top = 112.dp, end = 16.dp),
             ) {
-                Text("Share drawing")
+                FilledIconButton(onClick = ::saveAndShareDrawing) {
+                    Icon(Icons.Filled.Share, contentDescription = "Share drawing")
+                }
+
+                FilledIconButton(
+                    onClick = { showClearCanvasConfirmation = true },
+                    colors = IconButtonDefaults.filledIconButtonColors(
+                        containerColor = androidx.compose.ui.graphics.Color(0xFF8B0000),
+                    ),
+                ) {
+                    Icon(Icons.Filled.Delete, contentDescription = "Clear canvas")
+                }
             }
+        }
+
+        if (showClearCanvasConfirmation) {
+            AlertDialog(
+                onDismissRequest = { showClearCanvasConfirmation = false },
+                title = { Text("Clear the canvas?") },
+                text = { Text("This permanently erases everything you've drawn. This can't be undone.") },
+                confirmButton = {
+                    TextButton(onClick = {
+                        showClearCanvasConfirmation = false
+                        nativeEngine.nativeClearCanvas()
+                    }) {
+                        Text("Clear")
+                    }
+                },
+                dismissButton = {
+                    TextButton(onClick = { showClearCanvasConfirmation = false }) {
+                        Text("Cancel")
+                    }
+                },
+            )
         }
 
         if (appMode == AppMode.DATA_COLLECTION) {

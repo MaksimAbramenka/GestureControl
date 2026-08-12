@@ -19,6 +19,8 @@ namespace gesture_canvas {
 
         void submitInput(const InputEvent &event);
 
+        void clear();
+
         const std::vector<Stroke> &strokes() const { return strokes_; }
 
         // Finalized strokes plus the in-progress stroke (if any), for rendering -- so drawing

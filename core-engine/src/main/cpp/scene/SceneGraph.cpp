@@ -55,6 +55,12 @@ namespace gesture_canvas {
         }
     }
 
+    void SceneGraph::clear() {
+        strokes_.clear();
+        currentStroke_.reset();
+        smoother_.reset();
+    }
+
     std::vector<Stroke> SceneGraph::visibleStrokes() const {
         std::vector<Stroke> result = strokes_;
         if (currentStroke_.has_value()) {

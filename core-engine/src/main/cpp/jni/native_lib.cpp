@@ -197,3 +197,9 @@ Java_com_gesturecontrol_core_engine_NativeEngine_nativeSetBrushSize(
         JNIEnv *env, jobject /* thiz */, jfloat size) {
     gScene.setBrushSize(size);
 }
+
+extern "C" JNIEXPORT void JNICALL
+Java_com_gesturecontrol_core_engine_NativeEngine_nativeClearCanvas(
+        JNIEnv *env, jobject /* thiz */) {
+    gScene.clear();
+}
