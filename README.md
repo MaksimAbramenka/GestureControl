@@ -14,6 +14,8 @@ A gesture-driven drawing canvas for Android: raise a hand in front of the camera
 - Works with either hand.
 - Pick a brush color and line width from snapping carousel pickers; hover your fingertip over a carousel's edge for a beat to step through it hands-free.
 - A draggable, pinch-resizable picture-in-picture camera preview lets you see your own hand while drawing, without it blocking the canvas underneath.
+- Undo and redo, one step per finished stroke or whole erase gesture rather than per input frame — a brief gesture-classification hiccup that splits one continuous line into several strokes still only costs one undo.
+- Save the drawing as a PNG and share it, or clear the whole canvas in one tap (behind a confirmation — and undoable, since it's just another action on the same undo stack).
 - A built-in data-collection mode lets you record your own gesture examples straight from the app — the same tooling used to train the bundled model.
 
 ## Architecture
@@ -23,7 +25,7 @@ graph TD
     A["Camera (CameraX)"] --> B["MediaPipe HandLandmarker<br/>LIVE_STREAM, GPU delegate"]
     B --> C["Feature extraction<br/>63-float vector, wrist-normalized"]
     C --> D["LiteRT gesture classifier<br/>63 → 32 → 16 → 5 MLP, fp16"]
-    D --> E["Majority-vote smoothing<br/>5-frame window"]
+    D --> E["Majority-vote smoothing<br/>3-frame window"]
     E --> F["GestureInputMapper<br/>DRAW_START / MOVE / END synthesis"]
     F --> G["JNI bridge<br/>InputEvent struct"]
     G --> H["Native C++ core"]
@@ -90,10 +92,10 @@ POINT followed a similar arc, but the lesson was about naming rather than featur
 
 ## Testing
 
-TDD throughout, not retrofitted: **103 tests**, all passing.
+TDD throughout, not retrofitted: **120 tests**, all passing.
 
 - **71 Kotlin unit tests** (JUnit 5) across `domain` (61) and `core-ml` (10) — feature normalization, viewport/crop mapping, gesture smoothing, gesture-to-input-event mapping, the edge-dwell timer state machine — run on the JVM, no emulator needed.
-- **32 GoogleTest tests** for the C++ core (`scene/`, `render/`, `input/`), built and run completely independently of the Android/Gradle build via a host-side CMake project (`core-engine/src/test/cpp`) — the same scene graph, ribbon tessellation (including Catmull-Rom subdivision), and smoothing-filter logic that ships on-device, verified on the host machine in milliseconds.
+- **49 GoogleTest tests** for the C++ core (`scene/`, `render/`, `input/`), built and run completely independently of the Android/Gradle build via a host-side CMake project (`core-engine/src/test/cpp`) — the same scene graph (including snapshot-based undo/redo and the near-continuous-stroke merge), ribbon tessellation (including Catmull-Rom subdivision), and smoothing-filter logic that ships on-device, verified on the host machine in milliseconds.
 - Thin framework-glue code (CameraX wiring, the MediaPipe analyzer, the JNI marshaling layer) is intentionally not unit tested — it's verified by running on a physical device instead, which is where the real risk in that kind of code actually lives.
 
 ## Performance
@@ -120,7 +122,7 @@ To run the tests:
 ./gradlew test                                              # 71 Kotlin unit tests
 cmake -S core-engine/src/test/cpp -B core-engine/build/host-tests
 cmake --build core-engine/build/host-tests
-./core-engine/build/host-tests/gesture_canvas_core_tests      # 32 GoogleTest tests
+./core-engine/build/host-tests/gesture_canvas_core_tests      # 49 GoogleTest tests
 ```
 
 ## Tech stack

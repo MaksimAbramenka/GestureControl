@@ -410,7 +410,11 @@ private fun GestureControlHost() {
             AlertDialog(
                 onDismissRequest = { showClearCanvasConfirmation = false },
                 title = { Text("Clear the canvas?") },
-                text = { Text("This permanently erases everything you've drawn. This can't be undone.") },
+                text = {
+                    Text(
+                        "This erases everything you've drawn. You can undo it with the ↩ button if you change your mind.",
+                    )
+                },
                 confirmButton = {
                     TextButton(onClick = {
                         showClearCanvasConfirmation = false
