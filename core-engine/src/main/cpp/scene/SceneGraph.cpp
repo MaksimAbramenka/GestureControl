@@ -17,14 +17,24 @@ namespace gesture_canvas {
     void SceneGraph::submitInput(const InputEvent &event) {
         float timestampSeconds = static_cast<float>(event.timestamp_ms) / 1000.0f;
 
+        if (event.state != InputEvent::State::ERASE) {
+            wasErasing_ = false;
+        }
+
         switch (event.state) {
             case InputEvent::State::DRAW_START: {
                 if (currentStroke_.has_value()) {
-                    endStroke();
+                    finalizeCurrentStroke();
                 }
                 smoother_.reset();
                 Point2D point = smoother_.smooth(event.x, event.y, timestampSeconds);
-                beginStroke(point.x, point.y);
+
+                if (shouldContinuePreviousStroke(event.x, event.y, event.timestamp_ms)) {
+                    resumePreviousStroke(point.x, point.y);
+                } else {
+                    pushUndoSnapshot();
+                    beginStroke(point.x, point.y);
+                }
                 break;
             }
             case InputEvent::State::DRAW_MOVE: {
@@ -32,6 +42,7 @@ namespace gesture_canvas {
                     Point2D point = smoother_.smooth(event.x, event.y, timestampSeconds);
                     extendStroke(point.x, point.y);
                 } else {
+                    pushUndoSnapshot();
                     smoother_.reset();
                     Point2D point = smoother_.smooth(event.x, event.y, timestampSeconds);
                     beginStroke(point.x, point.y);
@@ -42,11 +53,16 @@ namespace gesture_canvas {
                 if (currentStroke_.has_value()) {
                     Point2D point = smoother_.smooth(event.x, event.y, timestampSeconds);
                     extendStroke(point.x, point.y);
-                    endStroke();
+                    endStroke(event.timestamp_ms, event.x, event.y);
                 }
                 break;
             }
             case InputEvent::State::ERASE:
+                if (!wasErasing_) {
+                    pushUndoSnapshot();
+                    wasErasing_ = true;
+                }
+                lastEndedPoint_.reset();
                 eraseNear(event.x, event.y);
                 break;
             case InputEvent::State::IDLE:
@@ -56,9 +72,38 @@ namespace gesture_canvas {
     }
 
     void SceneGraph::clear() {
+        pushUndoSnapshot();
         strokes_.clear();
         currentStroke_.reset();
         smoother_.reset();
+        lastEndedPoint_.reset();
+    }
+
+    void SceneGraph::undo() {
+        if (undoStack_.empty()) {
+            return;
+        }
+        redoStack_.push_back(strokes_);
+        strokes_ = std::move(undoStack_.back());
+        undoStack_.pop_back();
+        currentStroke_.reset();
+        lastEndedPoint_.reset();
+    }
+
+    void SceneGraph::redo() {
+        if (redoStack_.empty()) {
+            return;
+        }
+        undoStack_.push_back(strokes_);
+        strokes_ = std::move(redoStack_.back());
+        redoStack_.pop_back();
+        currentStroke_.reset();
+        lastEndedPoint_.reset();
+    }
+
+    void SceneGraph::pushUndoSnapshot() {
+        undoStack_.push_back(strokes_);
+        redoStack_.clear();
     }
 
     std::vector<Stroke> SceneGraph::visibleStrokes() const {
@@ -83,9 +128,33 @@ namespace gesture_canvas {
         currentStroke_->points.push_back({x, y});
     }
 
-    void SceneGraph::endStroke() {
+    void SceneGraph::finalizeCurrentStroke() {
         strokes_.push_back(*currentStroke_);
         currentStroke_.reset();
+    }
+
+    void SceneGraph::endStroke(int64_t timestampMs, float rawX, float rawY) {
+        finalizeCurrentStroke();
+        lastEndedPoint_ = Point2D{rawX, rawY};
+        lastEndedTimestampMs_ = timestampMs;
+    }
+
+    bool SceneGraph::shouldContinuePreviousStroke(float x, float y, int64_t timestampMs) const {
+        if (!lastEndedPoint_.has_value() || strokes_.empty()) {
+            return false;
+        }
+        if (timestampMs - lastEndedTimestampMs_ > kStrokeContinuityWindowMs) {
+            return false;
+        }
+        float dx = x - lastEndedPoint_->x;
+        float dy = y - lastEndedPoint_->y;
+        return std::sqrt(dx * dx + dy * dy) <= kStrokeContinuityRadius;
+    }
+
+    void SceneGraph::resumePreviousStroke(float x, float y) {
+        currentStroke_ = strokes_.back();
+        strokes_.pop_back();
+        currentStroke_->points.push_back({x, y});
     }
 
     void SceneGraph::eraseNear(float x, float y) {

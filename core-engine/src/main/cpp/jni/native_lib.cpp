@@ -203,3 +203,27 @@ Java_com_gesturecontrol_core_engine_NativeEngine_nativeClearCanvas(
         JNIEnv *env, jobject /* thiz */) {
     gScene.clear();
 }
+
+extern "C" JNIEXPORT void JNICALL
+Java_com_gesturecontrol_core_engine_NativeEngine_nativeUndo(
+        JNIEnv *env, jobject /* thiz */) {
+    gScene.undo();
+}
+
+extern "C" JNIEXPORT void JNICALL
+Java_com_gesturecontrol_core_engine_NativeEngine_nativeRedo(
+        JNIEnv *env, jobject /* thiz */) {
+    gScene.redo();
+}
+
+extern "C" JNIEXPORT jboolean JNICALL
+Java_com_gesturecontrol_core_engine_NativeEngine_nativeCanUndo(
+        JNIEnv *env, jobject /* thiz */) {
+    return gScene.canUndo();
+}
+
+extern "C" JNIEXPORT jboolean JNICALL
+Java_com_gesturecontrol_core_engine_NativeEngine_nativeCanRedo(
+        JNIEnv *env, jobject /* thiz */) {
+    return gScene.canRedo();
+}

@@ -53,6 +53,7 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.IntSize
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import androidx.core.content.ContextCompat
 import androidx.core.content.FileProvider
 import androidx.core.graphics.createBitmap
@@ -194,6 +195,8 @@ private fun GestureControlHost() {
     var sizeCarouselController by remember { mutableStateOf<CarouselController?>(null) }
     var colorCarouselActiveEdge by remember { mutableStateOf<Int?>(null) }
     var sizeCarouselActiveEdge by remember { mutableStateOf<Int?>(null) }
+    var canUndo by remember { mutableStateOf(false) }
+    var canRedo by remember { mutableStateOf(false) }
     val lastProcessedTimestampMs = remember { longArrayOf(-1L) }
 
     fun selectBrushColor(option: BrushColorOption) {
@@ -303,6 +306,8 @@ private fun GestureControlHost() {
                 timestampMs = handDetectionResult.timestampMs,
             )
             commands.forEach { nativeEngine.submit(it) }
+            canUndo = nativeEngine.nativeCanUndo()
+            canRedo = nativeEngine.nativeCanRedo()
         } else {
             cursorPosition = cursorSmoother.smooth(null)
             colorCarouselActiveEdge = null
@@ -370,6 +375,21 @@ private fun GestureControlHost() {
                 modifier = Modifier
                     .align(Alignment.TopEnd)
                     .padding(top = 112.dp, end = 16.dp),
+            ) {
+                FilledIconButton(onClick = { nativeEngine.nativeUndo() }, enabled = canUndo) {
+                    Text("↩", fontSize = 20.sp)
+                }
+
+                FilledIconButton(onClick = { nativeEngine.nativeRedo() }, enabled = canRedo) {
+                    Text("↪", fontSize = 20.sp)
+                }
+            }
+
+            Row(
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                modifier = Modifier
+                    .align(Alignment.TopEnd)
+                    .padding(top = 168.dp, end = 16.dp),
             ) {
                 FilledIconButton(onClick = ::saveAndShareDrawing) {
                     Icon(Icons.Filled.Share, contentDescription = "Share drawing")

@@ -33,6 +33,14 @@ class NativeEngine {
 
     external fun nativeClearCanvas()
 
+    external fun nativeUndo()
+
+    external fun nativeRedo()
+
+    external fun nativeCanUndo(): Boolean
+
+    external fun nativeCanRedo(): Boolean
+
     external fun nativeCaptureSnapshot(width: Int, height: Int): ByteArray?
 
     fun captureSnapshot(width: Int, height: Int): Bitmap? {

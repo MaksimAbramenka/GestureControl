@@ -187,3 +187,200 @@ TEST(SceneGraphTest, VisibleStrokesOmitInProgressStrokeWhenNotDrawing) {
     ASSERT_EQ(visible.size(), 1u);
     EXPECT_EQ(visible[0].points.size(), 2u);
 }
+
+TEST(SceneGraphTest, CanUndoAndCanRedoStartFalse) {
+    SceneGraph scene;
+
+    EXPECT_FALSE(scene.canUndo());
+    EXPECT_FALSE(scene.canRedo());
+}
+
+TEST(SceneGraphTest, UndoRevertsTheLastCompletedStroke) {
+    SceneGraph scene;
+    scene.submitInput(InputEvent{0.1f, 0.1f, InputEvent::State::DRAW_START, 1.0f, 0});
+    scene.submitInput(InputEvent{0.2f, 0.2f, InputEvent::State::DRAW_END, 1.0f, 10});
+    scene.submitInput(InputEvent{0.5f, 0.5f, InputEvent::State::DRAW_START, 1.0f, 20});
+    scene.submitInput(InputEvent{0.6f, 0.6f, InputEvent::State::DRAW_END, 1.0f, 30});
+    ASSERT_EQ(scene.strokes().size(), 2u);
+
+    scene.undo();
+
+    ASSERT_EQ(scene.strokes().size(), 1u);
+    EXPECT_TRUE(scene.canRedo());
+}
+
+TEST(SceneGraphTest, RedoReappliesAnUndoneStroke) {
+    SceneGraph scene;
+    scene.submitInput(InputEvent{0.1f, 0.1f, InputEvent::State::DRAW_START, 1.0f, 0});
+    scene.submitInput(InputEvent{0.2f, 0.2f, InputEvent::State::DRAW_END, 1.0f, 10});
+    scene.undo();
+    ASSERT_TRUE(scene.strokes().empty());
+
+    scene.redo();
+
+    ASSERT_EQ(scene.strokes().size(), 1u);
+    EXPECT_FALSE(scene.canRedo());
+}
+
+TEST(SceneGraphTest, UndoWithNothingToUndoIsANoOp) {
+    SceneGraph scene;
+
+    scene.undo();
+
+    EXPECT_TRUE(scene.strokes().empty());
+    EXPECT_FALSE(scene.canRedo());
+}
+
+TEST(SceneGraphTest, RedoWithNothingToRedoIsANoOp) {
+    SceneGraph scene;
+    scene.submitInput(InputEvent{0.1f, 0.1f, InputEvent::State::DRAW_START, 1.0f, 0});
+    scene.submitInput(InputEvent{0.2f, 0.2f, InputEvent::State::DRAW_END, 1.0f, 10});
+
+    scene.redo();
+
+    ASSERT_EQ(scene.strokes().size(), 1u);
+}
+
+TEST(SceneGraphTest, NewStrokeAfterUndoClearsTheRedoStack) {
+    SceneGraph scene;
+    scene.submitInput(InputEvent{0.1f, 0.1f, InputEvent::State::DRAW_START, 1.0f, 0});
+    scene.submitInput(InputEvent{0.2f, 0.2f, InputEvent::State::DRAW_END, 1.0f, 10});
+    scene.undo();
+    ASSERT_TRUE(scene.canRedo());
+
+    scene.submitInput(InputEvent{0.5f, 0.5f, InputEvent::State::DRAW_START, 1.0f, 20});
+    scene.submitInput(InputEvent{0.6f, 0.6f, InputEvent::State::DRAW_END, 1.0f, 30});
+
+    EXPECT_FALSE(scene.canRedo());
+}
+
+TEST(SceneGraphTest, UndoRevertsAWholeEraseGestureNotJustOneFrame) {
+    SceneGraph scene;
+    scene.submitInput(InputEvent{0.0f, 0.0f, InputEvent::State::DRAW_START, 1.0f, 0});
+    scene.submitInput(InputEvent{0.3f, 0.0f, InputEvent::State::DRAW_MOVE, 1.0f, 33});
+    scene.submitInput(InputEvent{0.6f, 0.0f, InputEvent::State::DRAW_MOVE, 1.0f, 66});
+    scene.submitInput(InputEvent{0.9f, 0.0f, InputEvent::State::DRAW_END, 1.0f, 99});
+    ASSERT_EQ(scene.strokes()[0].points.size(), 4u);
+
+    // A single held erase gesture spans several ERASE frames -- this should only cost one undo
+    // step, not one per frame.
+    Point2D first = scene.strokes()[0].points[0];
+    Point2D second = scene.strokes()[0].points[1];
+    scene.submitInput(InputEvent{first.x, first.y, InputEvent::State::ERASE, 1.0f, 100});
+    scene.submitInput(InputEvent{second.x, second.y, InputEvent::State::ERASE, 1.0f, 110});
+    ASSERT_EQ(scene.strokes()[0].points.size(), 2u);
+
+    scene.undo();
+
+    ASSERT_EQ(scene.strokes()[0].points.size(), 4u);
+    // One more undo step remains: the stroke's own creation (from DRAW_START).
+    EXPECT_TRUE(scene.canUndo());
+}
+
+TEST(SceneGraphTest, SeparateEraseGesturesAreSeparateUndoSteps) {
+    SceneGraph scene;
+    scene.submitInput(InputEvent{0.0f, 0.0f, InputEvent::State::DRAW_START, 1.0f, 0});
+    scene.submitInput(InputEvent{0.3f, 0.0f, InputEvent::State::DRAW_MOVE, 1.0f, 33});
+    scene.submitInput(InputEvent{0.6f, 0.0f, InputEvent::State::DRAW_MOVE, 1.0f, 66});
+    scene.submitInput(InputEvent{0.9f, 0.0f, InputEvent::State::DRAW_END, 1.0f, 99});
+
+    Point2D first = scene.strokes()[0].points[0];
+    scene.submitInput(InputEvent{first.x, first.y, InputEvent::State::ERASE, 1.0f, 100});
+    // Hand moves away between erase passes -- HOVER breaks the erase session.
+    scene.submitInput(InputEvent{0.5f, 0.5f, InputEvent::State::HOVER, 1.0f, 105});
+    Point2D second = scene.strokes()[0].points[0];
+    scene.submitInput(InputEvent{second.x, second.y, InputEvent::State::ERASE, 1.0f, 110});
+    ASSERT_EQ(scene.strokes()[0].points.size(), 2u);
+
+    scene.undo();
+    ASSERT_EQ(scene.strokes()[0].points.size(), 3u);
+    EXPECT_TRUE(scene.canUndo());
+
+    scene.undo();
+    ASSERT_EQ(scene.strokes()[0].points.size(), 4u);
+    // One more undo step remains: the stroke's own creation (from DRAW_START).
+    EXPECT_TRUE(scene.canUndo());
+}
+
+TEST(SceneGraphTest, ClearCanBeUndone) {
+    SceneGraph scene;
+    scene.submitInput(InputEvent{0.1f, 0.1f, InputEvent::State::DRAW_START, 1.0f, 0});
+    scene.submitInput(InputEvent{0.2f, 0.2f, InputEvent::State::DRAW_END, 1.0f, 10});
+    scene.clear();
+    ASSERT_TRUE(scene.strokes().empty());
+
+    scene.undo();
+
+    ASSERT_EQ(scene.strokes().size(), 1u);
+}
+
+// A brief gesture-classification flicker (or the fingertip grazing the PiP-suppression zone)
+// can end a stroke and immediately re-start one a moment later at nearly the same spot, even
+// though the user never stopped drawing. These strokes should merge into one, both in storage
+// and for undo -- otherwise a single undo doesn't remove what looks like one continuous line.
+TEST(SceneGraphTest, ADrawStartSoonAfterAndNearWhereTheLastStrokeEndedContinuesIt) {
+    SceneGraph scene;
+    scene.submitInput(InputEvent{0.1f, 0.1f, InputEvent::State::DRAW_START, 1.0f, 0});
+    scene.submitInput(InputEvent{0.2f, 0.2f, InputEvent::State::DRAW_END, 1.0f, 10});
+    ASSERT_EQ(scene.strokes().size(), 1u);
+
+    // Close in both time and space to the previous stroke's end point.
+    scene.submitInput(InputEvent{0.205f, 0.205f, InputEvent::State::DRAW_START, 1.0f, 60});
+    scene.submitInput(InputEvent{0.3f, 0.3f, InputEvent::State::DRAW_END, 1.0f, 70});
+
+    ASSERT_EQ(scene.strokes().size(), 1u);
+    EXPECT_EQ(scene.strokes()[0].points.size(), 4u);
+}
+
+TEST(SceneGraphTest, MergedStrokesOnlyCostOneUndoStep) {
+    SceneGraph scene;
+    scene.submitInput(InputEvent{0.1f, 0.1f, InputEvent::State::DRAW_START, 1.0f, 0});
+    scene.submitInput(InputEvent{0.2f, 0.2f, InputEvent::State::DRAW_END, 1.0f, 10});
+    scene.submitInput(InputEvent{0.205f, 0.205f, InputEvent::State::DRAW_START, 1.0f, 60});
+    scene.submitInput(InputEvent{0.3f, 0.3f, InputEvent::State::DRAW_END, 1.0f, 70});
+    scene.submitInput(InputEvent{0.305f, 0.305f, InputEvent::State::DRAW_START, 1.0f, 120});
+    scene.submitInput(InputEvent{0.4f, 0.4f, InputEvent::State::DRAW_END, 1.0f, 130});
+    ASSERT_EQ(scene.strokes()[0].points.size(), 6u);
+
+    scene.undo();
+
+    EXPECT_TRUE(scene.strokes().empty());
+    EXPECT_FALSE(scene.canUndo());
+}
+
+TEST(SceneGraphTest, ADrawStartFarInTimeFromTheLastStrokeStaysSeparate) {
+    SceneGraph scene;
+    scene.submitInput(InputEvent{0.1f, 0.1f, InputEvent::State::DRAW_START, 1.0f, 0});
+    scene.submitInput(InputEvent{0.2f, 0.2f, InputEvent::State::DRAW_END, 1.0f, 10});
+
+    // Same position, but a full second later -- a deliberate new stroke, not a flicker.
+    scene.submitInput(InputEvent{0.205f, 0.205f, InputEvent::State::DRAW_START, 1.0f, 1010});
+    scene.submitInput(InputEvent{0.3f, 0.3f, InputEvent::State::DRAW_END, 1.0f, 1020});
+
+    ASSERT_EQ(scene.strokes().size(), 2u);
+}
+
+TEST(SceneGraphTest, ADrawStartFarInSpaceFromTheLastStrokeStaysSeparate) {
+    SceneGraph scene;
+    scene.submitInput(InputEvent{0.1f, 0.1f, InputEvent::State::DRAW_START, 1.0f, 0});
+    scene.submitInput(InputEvent{0.2f, 0.2f, InputEvent::State::DRAW_END, 1.0f, 10});
+
+    // Soon after, but on the other side of the canvas.
+    scene.submitInput(InputEvent{0.8f, 0.8f, InputEvent::State::DRAW_START, 1.0f, 30});
+    scene.submitInput(InputEvent{0.9f, 0.9f, InputEvent::State::DRAW_END, 1.0f, 40});
+
+    ASSERT_EQ(scene.strokes().size(), 2u);
+}
+
+TEST(SceneGraphTest, ClearPreventsTheNextDrawFromResumingTheClearedStroke) {
+    SceneGraph scene;
+    scene.submitInput(InputEvent{0.1f, 0.1f, InputEvent::State::DRAW_START, 1.0f, 0});
+    scene.submitInput(InputEvent{0.2f, 0.2f, InputEvent::State::DRAW_END, 1.0f, 10});
+    scene.clear();
+
+    scene.submitInput(InputEvent{0.205f, 0.205f, InputEvent::State::DRAW_START, 1.0f, 20});
+    scene.submitInput(InputEvent{0.3f, 0.3f, InputEvent::State::DRAW_END, 1.0f, 30});
+
+    ASSERT_EQ(scene.strokes().size(), 1u);
+    EXPECT_EQ(scene.strokes()[0].points.size(), 2u);
+}

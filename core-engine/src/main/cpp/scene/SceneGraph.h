@@ -21,6 +21,14 @@ namespace gesture_canvas {
 
         void clear();
 
+        void undo();
+
+        void redo();
+
+        bool canUndo() const { return !undoStack_.empty(); }
+
+        bool canRedo() const { return !redoStack_.empty(); }
+
         const std::vector<Stroke> &strokes() const { return strokes_; }
 
         // Finalized strokes plus the in-progress stroke (if any), for rendering -- so drawing
@@ -32,13 +40,28 @@ namespace gesture_canvas {
 
         void extendStroke(float x, float y);
 
-        void endStroke();
+        void finalizeCurrentStroke();
+
+        void endStroke(int64_t timestampMs, float rawX, float rawY);
 
         void eraseNear(float x, float y);
+
+        void pushUndoSnapshot();
+
+        bool shouldContinuePreviousStroke(float x, float y, int64_t timestampMs) const;
+
+        void resumePreviousStroke(float x, float y);
 
         std::vector<Stroke> strokes_;
         std::optional<Stroke> currentStroke_;
         PointSmoother smoother_;
+
+        std::vector<std::vector<Stroke>> undoStack_;
+        std::vector<std::vector<Stroke>> redoStack_;
+        bool wasErasing_ = false;
+
+        std::optional<Point2D> lastEndedPoint_;
+        int64_t lastEndedTimestampMs_ = 0;
 
         float brushR_ = 0.1f;
         float brushG_ = 0.9f;
@@ -46,6 +69,8 @@ namespace gesture_canvas {
         float brushSize_ = 0.015f;
 
         static constexpr float kEraseRadius = 0.05f;
+        static constexpr float kStrokeContinuityRadius = 0.03f;
+        static constexpr int64_t kStrokeContinuityWindowMs = 400;
     };
 
 } // namespace gesture_canvas
