@@ -139,3 +139,7 @@ cmake --build core-engine/build/host-tests
 | Testing | JUnit 5, MockK, Turbine, GoogleTest |
 | Formatting | Spotless + ktlint, enforced via a pre-commit hook |
 | Build | AGP 9.3.0, Gradle version catalogs |
+
+## License
+
+[MIT](LICENSE)
