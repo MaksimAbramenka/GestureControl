@@ -9,7 +9,7 @@ same export settings.
 
 1. Open the app, switch to **Data collection** mode.
 2. Select a gesture class, hold the pose in front of the camera, and watch the per-hand counters
-   climb. Do this for both hands, for all five classes (`IDLE`, `HOVER`, `DRAW`, `ERASE`, `FLING`).
+   climb. Do this for both hands, for all five classes (`IDLE`, `HOVER`, `DRAW`, `ERASE`, `POINT`).
 3. Vary lighting, hand distance from the camera, and background across a couple of separate
    sittings rather than one continuous session — a classifier trained on one lighting setup in one
    room is a real risk for "works on the dev phone, falls apart elsewhere."
@@ -72,7 +72,7 @@ trusting it — the validation metrics above are a signal, not a guarantee.
 
 - The five gesture classes and their label strings must exactly match
   `domain/gesture/GestureClass.kt`'s enum declaration order (`IDLE`, `HOVER`, `DRAW`, `ERASE`,
-  `FLING`). `train.py` hardcodes this order and will refuse to train on a CSV with an unrecognized
+  `POINT`). `train.py` hardcodes this order and will refuse to train on a CSV with an unrecognized
   label, but if you ever add/reorder gesture classes in the app, update `GESTURE_CLASSES` in
   `train.py` to match.
 - `load_dataset()` also drops exact-duplicate rows before training (label + full feature vector

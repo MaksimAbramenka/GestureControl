@@ -46,7 +46,7 @@ class GestureInputMapper {
 
         val state = when (gestureClass) {
             GestureClass.IDLE -> InputState.IDLE
-            GestureClass.HOVER, GestureClass.FLING -> InputState.HOVER
+            GestureClass.HOVER, GestureClass.POINT -> InputState.HOVER
             GestureClass.ERASE -> InputState.ERASE
             GestureClass.DRAW -> if (isDrawing) InputState.DRAW_MOVE else InputState.DRAW_START
         }

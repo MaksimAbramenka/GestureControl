@@ -7,9 +7,6 @@ import androidx.compose.ui.geometry.CornerRadius
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.Path
-import androidx.compose.ui.graphics.StrokeCap
-import androidx.compose.ui.graphics.StrokeJoin
 import androidx.compose.ui.graphics.drawscope.DrawScope
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.drawscope.rotate
@@ -25,9 +22,9 @@ private val EraserHeight = 26.dp
 private val EraserCornerRadius = 6.dp
 private val EraserBandHeight = 8.dp
 private val EraserRotationDegrees = -25f
-private val FlingChevronSpan = 26.dp
-private val FlingChevronHeight = 16.dp
-private val FlingColor = Color(0xFF7B61FF)
+private val PointDotRadius = 10.dp
+private val PointRingRadius = 16.dp
+private val PointColor = Color(0xFF7B61FF)
 
 /** Shows where the tracked fingertip currently is, styled by the active gesture so IDLE/HOVER,
  * an active DRAW and ERASE are each visually distinct without having to watch the camera feed. */
@@ -48,7 +45,7 @@ fun GestureCursorOverlay(
             GestureClass.IDLE, GestureClass.HOVER -> drawHoverDot(center)
             GestureClass.DRAW -> drawActiveDot(center, brushColor)
             GestureClass.ERASE -> drawEraserIcon(center)
-            GestureClass.FLING -> drawFlingIcon(center)
+            GestureClass.POINT -> drawPointIcon(center)
         }
     }
 }
@@ -104,24 +101,12 @@ private fun DrawScope.drawEraserIcon(center: Offset) {
     }
 }
 
-private fun DrawScope.drawFlingIcon(center: Offset) {
-    val halfSpan = FlingChevronSpan.toPx()
-    val headSize = FlingChevronHeight.toPx() / 2f
-    val strokeWidth = CursorStrokeWidth.toPx() * 2.2f
-    val strokeStyle = Stroke(width = strokeWidth, cap = StrokeCap.Round, join = StrokeJoin.Round)
-
-    val leftEnd = Offset(center.x - halfSpan, center.y)
-    val rightEnd = Offset(center.x + halfSpan, center.y)
-
-    val arrow = Path().apply {
-        moveTo(leftEnd.x, leftEnd.y)
-        lineTo(rightEnd.x, rightEnd.y)
-        moveTo(leftEnd.x + headSize, leftEnd.y - headSize)
-        lineTo(leftEnd.x, leftEnd.y)
-        lineTo(leftEnd.x + headSize, leftEnd.y + headSize)
-        moveTo(rightEnd.x - headSize, rightEnd.y - headSize)
-        lineTo(rightEnd.x, rightEnd.y)
-        lineTo(rightEnd.x - headSize, rightEnd.y + headSize)
-    }
-    drawPath(arrow, color = FlingColor, style = strokeStyle)
+private fun DrawScope.drawPointIcon(center: Offset) {
+    drawCircle(color = PointColor, radius = PointDotRadius.toPx(), center = center)
+    drawCircle(
+        color = PointColor.copy(alpha = 0.5f),
+        radius = PointRingRadius.toPx(),
+        center = center,
+        style = Stroke(width = CursorStrokeWidth.toPx()),
+    )
 }

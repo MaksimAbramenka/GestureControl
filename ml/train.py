@@ -32,7 +32,7 @@ print("Libraries loaded.")
 # Must match domain/gesture/GestureClass.kt's enum declaration order exactly --
 # GestureClassifierOutput.interpret() does GestureClass.entries[argmax], so an
 # out-of-order mismatch here is a silent wrong-state bug, not a crash.
-GESTURE_CLASSES = ["IDLE", "HOVER", "DRAW", "ERASE", "FLING"]
+GESTURE_CLASSES = ["IDLE", "HOVER", "DRAW", "ERASE", "POINT"]
 
 
 def load_dataset(csv_path: Path) -> tuple[np.ndarray, np.ndarray]:
