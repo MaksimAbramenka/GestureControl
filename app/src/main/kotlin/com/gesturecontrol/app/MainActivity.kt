@@ -376,11 +376,25 @@ private fun GestureControlHost() {
                     .align(Alignment.TopEnd)
                     .padding(top = 112.dp, end = 16.dp),
             ) {
-                FilledIconButton(onClick = { nativeEngine.nativeUndo() }, enabled = canUndo) {
+                FilledIconButton(
+                    onClick = {
+                        nativeEngine.nativeUndo()
+                        canUndo = nativeEngine.nativeCanUndo()
+                        canRedo = nativeEngine.nativeCanRedo()
+                    },
+                    enabled = canUndo,
+                ) {
                     Text("↩", fontSize = 20.sp)
                 }
 
-                FilledIconButton(onClick = { nativeEngine.nativeRedo() }, enabled = canRedo) {
+                FilledIconButton(
+                    onClick = {
+                        nativeEngine.nativeRedo()
+                        canUndo = nativeEngine.nativeCanUndo()
+                        canRedo = nativeEngine.nativeCanRedo()
+                    },
+                    enabled = canRedo,
+                ) {
                     Text("↪", fontSize = 20.sp)
                 }
             }
@@ -412,13 +426,15 @@ private fun GestureControlHost() {
                 title = { Text("Clear the canvas?") },
                 text = {
                     Text(
-                        "This erases everything you've drawn. You can undo it with the ↩ button if you change your mind.",
+                        "This erases everything you've drawn, including your undo history. This can't be undone.",
                     )
                 },
                 confirmButton = {
                     TextButton(onClick = {
                         showClearCanvasConfirmation = false
                         nativeEngine.nativeClearCanvas()
+                        canUndo = nativeEngine.nativeCanUndo()
+                        canRedo = nativeEngine.nativeCanRedo()
                     }) {
                         Text("Clear")
                     }

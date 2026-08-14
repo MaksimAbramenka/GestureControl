@@ -72,11 +72,12 @@ namespace gesture_canvas {
     }
 
     void SceneGraph::clear() {
-        pushUndoSnapshot();
         strokes_.clear();
         currentStroke_.reset();
         smoother_.reset();
         lastEndedPoint_.reset();
+        undoStack_.clear();
+        redoStack_.clear();
     }
 
     void SceneGraph::undo() {

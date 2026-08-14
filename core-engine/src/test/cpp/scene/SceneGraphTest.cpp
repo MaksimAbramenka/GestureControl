@@ -302,16 +302,20 @@ TEST(SceneGraphTest, SeparateEraseGesturesAreSeparateUndoSteps) {
     EXPECT_TRUE(scene.canUndo());
 }
 
-TEST(SceneGraphTest, ClearCanBeUndone) {
+TEST(SceneGraphTest, ClearWipesUndoAndRedoHistory) {
     SceneGraph scene;
     scene.submitInput(InputEvent{0.1f, 0.1f, InputEvent::State::DRAW_START, 1.0f, 0});
     scene.submitInput(InputEvent{0.2f, 0.2f, InputEvent::State::DRAW_END, 1.0f, 10});
+    ASSERT_TRUE(scene.canUndo());
+
     scene.clear();
+
     ASSERT_TRUE(scene.strokes().empty());
+    EXPECT_FALSE(scene.canUndo());
+    EXPECT_FALSE(scene.canRedo());
 
     scene.undo();
-
-    ASSERT_EQ(scene.strokes().size(), 1u);
+    ASSERT_TRUE(scene.strokes().empty());
 }
 
 // A brief gesture-classification flicker (or the fingertip grazing the PiP-suppression zone)

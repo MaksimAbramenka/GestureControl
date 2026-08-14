@@ -15,7 +15,7 @@ A gesture-driven drawing canvas for Android: raise a hand in front of the camera
 - Pick a brush color and line width from snapping carousel pickers; hover your fingertip over a carousel's edge for a beat to step through it hands-free.
 - A draggable, pinch-resizable picture-in-picture camera preview lets you see your own hand while drawing, without it blocking the canvas underneath.
 - Undo and redo, one step per finished stroke or whole erase gesture rather than per input frame — a brief gesture-classification hiccup that splits one continuous line into several strokes still only costs one undo.
-- Save the drawing as a PNG and share it, or clear the whole canvas in one tap (behind a confirmation — and undoable, since it's just another action on the same undo stack).
+- Save the drawing as a PNG and share it, or clear the whole canvas in one tap (behind a confirmation — this is a hard reset, wiping the undo/redo history along with the drawing, so the Undo/Redo buttons correctly go dark afterward instead of offering to restore something that was just deliberately thrown away).
 - A built-in data-collection mode lets you record your own gesture examples straight from the app — the same tooling used to train the bundled model.
 
 ## Architecture
