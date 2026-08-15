@@ -110,7 +110,7 @@ cd GestureControl
 ./gradlew assembleDebug
 ```
 
-Requires a physical Android device (API 26+) with a front-facing camera — the emulator's GPU support is generally insufficient for MediaPipe's GPU delegate. Install with:
+Requires a physical Android device (API 33+ — bumped from API 26+ in Phase 2 for on-device speech recognition) with a front-facing camera and a microphone — the emulator's GPU support is generally insufficient for MediaPipe's GPU delegate. Install with:
 
 ```bash
 ./gradlew installDebug

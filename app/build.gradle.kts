@@ -47,6 +47,7 @@ dependencies {
     implementation(project(":core-ml:gesture-classifier"))
     implementation(project(":core-engine"))
     implementation(project(":core-ui"))
+    implementation(project(":core-voice"))
 
     implementation(libs.core.ktx)
     implementation(libs.lifecycle.runtime.ktx)

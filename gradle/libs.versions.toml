@@ -1,6 +1,6 @@
 [versions]
 compileSdk = "37"
-minSdk = "26"
+minSdk = "33"
 targetSdk = "37"
 
 agp = "9.3.0"
