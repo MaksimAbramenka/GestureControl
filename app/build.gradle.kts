@@ -79,3 +79,49 @@ dependencies {
 tasks.withType<Test> {
     useJUnitPlatform()
 }
+
+val voiceModelFileName = "functiongemma-270m-mobile-actions.litertlm"
+val voiceModelLocalFile = rootProject.file("ml/models/mobile_actions_q8_ekv1024.litertlm")
+val voiceModelDeviceDir = "/sdcard/Android/data/com.gesturecontrol/files/models"
+val voiceModelDevicePath = "$voiceModelDeviceDir/$voiceModelFileName"
+
+fun runCommand(vararg command: String): Pair<Int, String> {
+    val process = ProcessBuilder(*command).redirectErrorStream(true).start()
+    val output = process.inputStream.bufferedReader().readText()
+    return process.waitFor() to output
+}
+
+tasks.register("pushVoiceModel") {
+    group = "install"
+    description = "Pushes the LiteRT-LM voice-command model to the device if it isn't already there."
+    doLast {
+        if (!voiceModelLocalFile.exists()) {
+            logger.lifecycle(
+                "Voice model not found at ${voiceModelLocalFile.path} -- skipping push. " +
+                    "Voice commands will report unavailable. See README's \"Voice commands model\" section.",
+            )
+            return@doLast
+        }
+
+        val (statExitValue, statOutput) = runCommand("adb", "shell", "stat", "-c%s", voiceModelDevicePath)
+        val remoteSize = if (statExitValue == 0) statOutput.trim().toLongOrNull() else null
+
+        if (remoteSize == voiceModelLocalFile.length()) {
+            logger.lifecycle("Voice model already on device (size matches), skipping push.")
+            return@doLast
+        }
+
+        logger.lifecycle("Pushing voice model to device (~280MB, this may take a minute)...")
+        runCommand("adb", "shell", "mkdir", "-p", voiceModelDeviceDir)
+        val (pushExitValue, pushOutput) = runCommand("adb", "push", voiceModelLocalFile.path, voiceModelDevicePath)
+        if (pushExitValue != 0) {
+            logger.warn("Voice model push failed:\n$pushOutput")
+        } else {
+            logger.lifecycle("Voice model pushed successfully.")
+        }
+    }
+}
+
+afterEvaluate {
+    tasks.findByName("installDebug")?.finalizedBy("pushVoiceModel")
+}

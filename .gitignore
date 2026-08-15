@@ -20,3 +20,4 @@ captures/
 
 ml/venv/
 ml/__pycache__/
+ml/models/*.litertlm

@@ -125,6 +125,18 @@ cmake --build core-engine/build/host-tests
 ./core-engine/build/host-tests/gesture_canvas_core_tests      # 49 GoogleTest tests
 ```
 
+## Voice commands model (Phase 2, in progress)
+
+Phase 2 adds on-device voice commands via [LiteRT-LM](https://developers.google.com/edge/litert-lm) running a FunctionGemma-class model (~289MB). Unlike the tiny 8KB gesture classifier above, this model is **not** bundled as an APK asset or committed to git — it's gated behind Hugging Face's Gemma license and far over GitHub's 100MB file limit. The app builds and runs fully without it; voice commands simply report unavailable until it's provided (see `VoiceCommandClassifier.isModelAvailable()`).
+
+To try voice commands once that feature is wired up:
+
+1. Accept the Gemma license and download `mobile_actions_q8_ekv1024.litertlm` from Hugging Face: [litert-community/functiongemma-270m-ft-mobile-actions](https://huggingface.co/litert-community/functiongemma-270m-ft-mobile-actions) (the generic CPU/GPU variant — not the `_Google_Tensor_G5` one, which is pre-compiled for Pixel 10-series hardware specifically).
+2. Save it as `ml/models/mobile_actions_q8_ekv1024.litertlm` (gitignored — never committed).
+3. Run `./gradlew installDebug` as usual. A `pushVoiceModel` task runs automatically afterward, pushing the model to the device's app-external storage if it isn't already there (size-checked, so it's a fast no-op on every install after the first — no separate command to remember, and reinstalling doesn't re-push 280MB every time).
+
+**Known limitation:** the tool-calling mechanism itself is solid — LiteRT-LM's constrained decoding never produces malformed output, and every recognized command maps to the exact right typed `Command`. But this specific 270M "mobile-actions" fine-tune, evaluated against this project's custom command vocabulary (not the phone-assistant actions it was fine-tuned on), recognizes intent inconsistently — roughly a third to half of natural phrasings across repeated test runs, with some run-to-run variance on identical input even under greedy decoding. A system instruction with few-shot examples and consolidating near-duplicate tools (e.g. one `setContinuousListening(enabled)` instead of two separate start/stop tools) measurably helped but didn't close the gap. Worth revisiting once the full gesture-triggered flow is testable end-to-end with real speech rather than hardcoded transcripts — see the `mediapipe-litert-pipeline`-adjacent lesson-in-progress: a small model fine-tuned for one tool vocabulary doesn't necessarily generalize to a different, custom one.
+
 ## Tech stack
 
 | Layer | Choice |
