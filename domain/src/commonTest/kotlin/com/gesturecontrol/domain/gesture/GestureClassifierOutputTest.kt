@@ -1,8 +1,8 @@
 package com.gesturecontrol.domain.gesture
 
-import org.junit.jupiter.api.Assertions.assertEquals
-import org.junit.jupiter.api.Test
-import org.junit.jupiter.api.assertThrows
+import kotlin.test.Test
+import kotlin.test.assertEquals
+import kotlin.test.assertFailsWith
 
 class GestureClassifierOutputTest {
     @Test
@@ -46,7 +46,7 @@ class GestureClassifierOutputTest {
 
     @Test
     fun `throws when the probability count does not match the number of gesture classes`() {
-        assertThrows<IllegalArgumentException> {
+        assertFailsWith<IllegalArgumentException> {
             GestureClassifierOutput.interpret(floatArrayOf(0.5f, 0.5f))
         }
     }

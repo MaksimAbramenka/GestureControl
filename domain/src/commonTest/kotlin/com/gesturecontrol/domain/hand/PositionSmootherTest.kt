@@ -1,8 +1,8 @@
 package com.gesturecontrol.domain.hand
 
-import org.junit.jupiter.api.Assertions.assertEquals
-import org.junit.jupiter.api.Assertions.assertNull
-import org.junit.jupiter.api.Test
+import kotlin.test.Test
+import kotlin.test.assertEquals
+import kotlin.test.assertNull
 
 class PositionSmootherTest {
     @Test
@@ -25,7 +25,7 @@ class PositionSmootherTest {
     }
 
     @Test
-    fun `after a reset the next point is returned as-is again, not blended with the old value`() {
+    fun `after a reset the next point is returned as-is again -- not blended with the old value`() {
         val smoother = PositionSmoother(smoothingFactor = 0.5f)
         smoother.smooth(NormalizedPoint(0.2f, 0.4f, 0f))
         smoother.smooth(null)

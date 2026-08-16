@@ -2,10 +2,10 @@ package com.gesturecontrol.domain.training
 
 import com.gesturecontrol.domain.gesture.GestureClass
 import com.gesturecontrol.domain.hand.Handedness
-import org.junit.jupiter.api.Assertions.assertEquals
-import org.junit.jupiter.api.Assertions.assertFalse
-import org.junit.jupiter.api.Assertions.assertTrue
-import org.junit.jupiter.api.Test
+import kotlin.test.Test
+import kotlin.test.assertEquals
+import kotlin.test.assertFalse
+import kotlin.test.assertTrue
 
 class RecordingProgressTest {
     @Test
@@ -27,7 +27,7 @@ class RecordingProgressTest {
     }
 
     @Test
-    fun `withCount sets an absolute value, used when loading persisted state`() {
+    fun `withCount sets an absolute value -- used when loading persisted state`() {
         val progress = RecordingProgress().withCount(GestureClass.ERASE, Handedness.RIGHT, 42)
 
         assertEquals(42, progress.count(GestureClass.ERASE, Handedness.RIGHT))

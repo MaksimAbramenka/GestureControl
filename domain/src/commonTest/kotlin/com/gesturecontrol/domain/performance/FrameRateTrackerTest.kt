@@ -1,13 +1,13 @@
 package com.gesturecontrol.domain.performance
 
-import org.junit.jupiter.api.Assertions.assertEquals
-import org.junit.jupiter.api.Test
+import kotlin.test.Test
+import kotlin.test.assertEquals
 
 class FrameRateTrackerTest {
     private val tolerance = 0.01f
 
     @Test
-    fun `first frame has no prior interval to measure, reports zero`() {
+    fun `first frame has no prior interval to measure -- reports zero`() {
         val tracker = FrameRateTracker()
 
         assertEquals(0f, tracker.onFrame(1000L), tolerance)

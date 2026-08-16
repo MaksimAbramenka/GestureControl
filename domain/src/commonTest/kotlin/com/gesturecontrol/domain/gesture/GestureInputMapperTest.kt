@@ -1,8 +1,8 @@
 package com.gesturecontrol.domain.gesture
 
 import com.gesturecontrol.domain.hand.NormalizedPoint
-import org.junit.jupiter.api.Assertions.assertEquals
-import org.junit.jupiter.api.Test
+import kotlin.test.Test
+import kotlin.test.assertEquals
 
 class GestureInputMapperTest {
     private val point = NormalizedPoint(x = 0.3f, y = 0.4f, z = 0f)

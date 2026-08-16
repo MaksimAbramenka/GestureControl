@@ -1,25 +1,10 @@
 package com.gesturecontrol.domain.hand
 
-import org.junit.jupiter.api.Assertions.assertEquals
-import org.junit.jupiter.api.Test
-import org.junit.jupiter.api.assertThrows
-import org.junit.jupiter.params.ParameterizedTest
-import org.junit.jupiter.params.provider.Arguments
-import org.junit.jupiter.params.provider.MethodSource
+import kotlin.test.Test
+import kotlin.test.assertEquals
+import kotlin.test.assertFailsWith
 
 class LandmarkViewportMapperTest {
-    companion object {
-        @JvmStatic
-        fun invalidDimensions(): List<Arguments> =
-            listOf(
-                Arguments.of(0, 100, 100f, 100f),
-                Arguments.of(100, 0, 100f, 100f),
-                Arguments.of(100, 100, 0f, 100f),
-                Arguments.of(100, 100, 100f, 0f),
-                Arguments.of(-1, 100, 100f, 100f),
-            )
-    }
-
     private val tolerance = 0.001f
 
     @Test
@@ -54,7 +39,7 @@ class LandmarkViewportMapperTest {
     }
 
     @Test
-    fun `wide image in square viewport crops left and right, center still maps to center`() {
+    fun `wide image in square viewport crops left and right -- center still maps to center`() {
         // image aspect 2:1 (e.g. landscape sensor output), viewport is square -> horizontal crop
         val result = NormalizedPoint(x = 0.5f, y = 0.5f, z = 0f).toViewportPoint(
             imageDimensions = ImageDimensions(width = 200, height = 100),
@@ -110,7 +95,7 @@ class LandmarkViewportMapperTest {
     }
 
     @Test
-    fun `viewport-normalized center maps to 0-5, 0-5 regardless of aspect mismatch`() {
+    fun `viewport-normalized center maps to 0-5 by 0-5 regardless of aspect mismatch`() {
         val result = NormalizedPoint(x = 0.5f, y = 0.5f, z = 0f).toViewportNormalizedPoint(
             imageDimensions = ImageDimensions(width = 640, height = 480),
             viewportDimensions = ViewportDimensions(width = 1080f, height = 2280f),
@@ -138,20 +123,25 @@ class LandmarkViewportMapperTest {
         assertEquals(1f, rightEdge.x, tolerance)
     }
 
-    @ParameterizedTest
-    @MethodSource("invalidDimensions")
-    fun `rejects non-positive dimensions`(
-        imageWidth: Int,
-        imageHeight: Int,
-        viewportWidth: Float,
-        viewportHeight: Float,
-    ) {
-        assertThrows<IllegalArgumentException> {
-            NormalizedPoint(x = 0.5f, y = 0.5f, z = 0f).toViewportPoint(
-                imageDimensions = ImageDimensions(width = imageWidth, height = imageHeight),
-                viewportDimensions = ViewportDimensions(width = viewportWidth, height = viewportHeight),
-                mirrored = false,
-            )
+    @Test
+    fun `rejects non-positive dimensions`() {
+        data class Case(val imageWidth: Int, val imageHeight: Int, val viewportWidth: Float, val viewportHeight: Float)
+        val cases = listOf(
+            Case(0, 100, 100f, 100f),
+            Case(100, 0, 100f, 100f),
+            Case(100, 100, 0f, 100f),
+            Case(100, 100, 100f, 0f),
+            Case(-1, 100, 100f, 100f),
+        )
+
+        cases.forEach { case ->
+            assertFailsWith<IllegalArgumentException>("expected failure for $case") {
+                NormalizedPoint(x = 0.5f, y = 0.5f, z = 0f).toViewportPoint(
+                    imageDimensions = ImageDimensions(width = case.imageWidth, height = case.imageHeight),
+                    viewportDimensions = ViewportDimensions(width = case.viewportWidth, height = case.viewportHeight),
+                    mirrored = false,
+                )
+            }
         }
     }
 }

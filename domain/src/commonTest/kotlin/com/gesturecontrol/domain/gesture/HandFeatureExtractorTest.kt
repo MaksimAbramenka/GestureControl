@@ -2,10 +2,10 @@ package com.gesturecontrol.domain.gesture
 
 import com.gesturecontrol.domain.hand.HandLandmarks
 import com.gesturecontrol.domain.hand.NormalizedPoint
-import org.junit.jupiter.api.Assertions.assertEquals
-import org.junit.jupiter.api.Test
-import org.junit.jupiter.api.assertThrows
 import kotlin.math.sqrt
+import kotlin.test.Test
+import kotlin.test.assertEquals
+import kotlin.test.assertFailsWith
 
 class HandFeatureExtractorTest {
     private val tolerance = 0.001f
@@ -102,13 +102,13 @@ class HandFeatureExtractorTest {
     }
 
     @Test
-    fun `throws when wrist and middle MCP coincide, since scale would be zero`() {
+    fun `throws when wrist and middle MCP coincide -- since scale would be zero`() {
         val hand = handWithWristAndMiddleMcp(
             wrist = NormalizedPoint(0.2f, 0.2f, 0f),
             middleMcp = NormalizedPoint(0.2f, 0.2f, 0f),
         )
 
-        assertThrows<IllegalArgumentException> {
+        assertFailsWith<IllegalArgumentException> {
             HandFeatureExtractor.extractFeatures(hand)
         }
     }
