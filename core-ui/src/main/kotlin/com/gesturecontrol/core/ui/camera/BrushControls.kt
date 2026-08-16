@@ -247,6 +247,13 @@ private fun <T> SelectionCarousel(
                 centerMostVisibleIndex(listState)?.let { onSelect(items[it]) }
             }
     }
+
+    LaunchedEffect(selected) {
+        val targetIndex = items.indexOf(selected)
+        if (targetIndex >= 0 && centerMostVisibleIndex(listState) != targetIndex) {
+            listState.centerOnItem(targetIndex)
+        }
+    }
 }
 
 private fun centerEmphasis(state: LazyListState, index: Int, itemSizePx: Float): Pair<Float, Float> {

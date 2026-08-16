@@ -78,8 +78,9 @@ import com.gesturecontrol.core.ui.camera.PIP_ASPECT_RATIO
 import com.gesturecontrol.core.ui.camera.PIP_DEFAULT_SIZE_FRACTION
 import com.gesturecontrol.core.ui.camera.VoiceActivationLabel
 import com.gesturecontrol.core.ui.engine.NativeCanvasSurface
-import com.gesturecontrol.core.voice.SpeechRecognitionEvent
 import com.gesturecontrol.core.voice.SpeechRecognizerSource
+import com.gesturecontrol.core.voice.VoiceActivationOrchestrator
+import com.gesturecontrol.core.voice.VoiceActivationResult
 import com.gesturecontrol.core.voice.VoiceCommandClassifier
 import com.gesturecontrol.domain.gesture.GestureClass
 import com.gesturecontrol.domain.gesture.GestureInputMapper
@@ -99,7 +100,6 @@ import com.gesturecontrol.domain.voice.PointHoldGate
 import com.gesturecontrol.domain.voice.VoiceActivationController
 import com.gesturecontrol.domain.voice.VoiceActivationState
 import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.flow.firstOrNull
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import java.io.File
@@ -173,6 +173,9 @@ private fun GestureControlHost() {
     val voiceActivationController = remember { VoiceActivationController() }
     val speechRecognizerSource = remember { SpeechRecognizerSource(context) }
     val voiceCommandClassifier = remember { VoiceCommandClassifier(context) }
+    val voiceActivationOrchestrator = remember(speechRecognizerSource, voiceCommandClassifier) {
+        VoiceActivationOrchestrator(speechRecognizerSource, voiceCommandClassifier)
+    }
     val coroutineScope = rememberCoroutineScope()
 
     val micPermissionLauncher = rememberLauncherForActivityResult(
@@ -290,25 +293,20 @@ private fun GestureControlHost() {
         }
     }
 
-    suspend fun runVoiceActivation(): Command? {
-        val event = speechRecognizerSource.listenOnce().firstOrNull()
-        lastVoiceTranscript = (event as? SpeechRecognitionEvent.Result)?.transcript
-        return when (event) {
-            is SpeechRecognitionEvent.Result -> voiceCommandClassifier.classify(event.transcript).also {
-                applyVoiceCommand(it)
+    suspend fun runOneVoiceActivationCycle() {
+        when (val result = voiceActivationOrchestrator.runOnce()) {
+            is VoiceActivationResult.Heard -> {
+                lastVoiceTranscript = result.transcript
+                lastVoiceCommand = result.command
+                applyVoiceCommand(result.command)
+                voiceActivationController.onCommandCaptured(result.command)
             }
 
-            is SpeechRecognitionEvent.Error, null -> null
-        }
-    }
-
-    suspend fun runOneVoiceActivationCycle() {
-        val command = runVoiceActivation()
-        lastVoiceCommand = command
-        if (command != null) {
-            voiceActivationController.onCommandCaptured(command)
-        } else {
-            voiceActivationController.onListeningTimeout()
+            VoiceActivationResult.CaptureFailed -> {
+                lastVoiceTranscript = null
+                lastVoiceCommand = null
+                voiceActivationController.onListeningTimeout()
+            }
         }
         voiceActivationState = voiceActivationController.state
     }

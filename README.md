@@ -1,6 +1,6 @@
 # GestureControl
 
-A gesture-driven drawing canvas for Android: raise a hand in front of the camera, pinch to draw, hold up two fingers to erase — no touch input at all. An on-device ML pipeline (MediaPipe → a custom-trained LiteRT classifier) drives a hand-written C++/OpenGL native rendering core, wired together over JNI.
+A gesture-driven drawing canvas for Android: raise a hand in front of the camera, pinch to draw, hold up two fingers to erase, hold a point pose and speak a command — no touch input at all. An on-device ML pipeline (MediaPipe → a custom-trained LiteRT classifier) drives a hand-written C++/OpenGL native rendering core, wired together over JNI, with a second on-device LLM pipeline (LiteRT-LM) layered on top for voice commands.
 
 ![Demo](media/demo.gif)
 
@@ -17,6 +17,7 @@ A gesture-driven drawing canvas for Android: raise a hand in front of the camera
 - Undo and redo, one step per finished stroke or whole erase gesture rather than per input frame — a brief gesture-classification hiccup that splits one continuous line into several strokes still only costs one undo.
 - Save the drawing as a PNG and share it, or clear the whole canvas in one tap (behind a confirmation — this is a hard reset, wiping the undo/redo history along with the drawing, so the Undo/Redo buttons correctly go dark afterward instead of offering to restore something that was just deliberately thrown away).
 - A built-in data-collection mode lets you record your own gesture examples straight from the app — the same tooling used to train the bundled model.
+- Hold a `POINT` pose (index finger extended, static) and speak a command — "change the color to red," "undo," "clear the canvas" — for a touchless voice-command layer running entirely on-device via a second LLM. Say "start listening" to switch to hands-free continuous mode (no more `POINT` needed per command) and "stop listening" to switch back.
 
 ## Architecture
 
@@ -35,9 +36,15 @@ graph TD
     H2 --> H1
     H1 --> H3
     H3 --> I["GLSurfaceView<br/>composited over the camera preview"]
+
+    E --> P["PointHoldGate<br/>sustained POINT-pose timer"]
+    P --> Q["On-device SpeechRecognizer<br/>createOnDeviceSpeechRecognizer"]
+    Q --> R["LiteRT-LM + FunctionGemma<br/>tool-calling, constrained decoding"]
+    R --> S["Command<br/>SetBrushColor / Undo / Clear / ..."]
+    S -.->|"same setters the UI buttons already call"| H
 ```
 
-The dividing line that makes this tractable: **the native core only ever sees `InputEvent { x, y, state, pressure, timestamp_ms }`.** It has no idea the input came from a camera and a hand-pose classifier rather than a touchscreen or a mouse — the rendering core stays simple and swappable because it's never coupled to where the input actually comes from.
+The dividing line that makes this tractable: **the native core only ever sees `InputEvent { x, y, state, pressure, timestamp_ms }`.** It has no idea the input came from a camera and a hand-pose classifier rather than a touchscreen or a mouse — the rendering core stays simple and swappable because it's never coupled to where the input actually comes from. Voice commands deliberately don't join that stream at all — a `Command` is a discrete action (a setter call), not stroke input, so it's kept on its own path (dashed above) that happens to call the same setters the on-screen buttons do, rather than being shoehorned into `InputEvent`.
 
 ### Module structure (Clean Architecture)
 
@@ -49,6 +56,7 @@ graph BT
     gestureClassifier["core-ml:gesture-classifier<br/>LiteRT wrapper"]
     coreEngine["core-engine<br/>JNI + C++ native core"]
     coreUi["core-ui<br/>Compose"]
+    coreVoice["core-voice<br/>STT + LiteRT-LM"]
     app["app"]
 
     coreCamera --> domain
@@ -58,12 +66,14 @@ graph BT
     coreEngine --> domain
     coreUi --> domain
     coreUi --> coreEngine
+    coreVoice --> domain
     app --> domain
     app --> coreCamera
     app --> coreMl
     app --> gestureClassifier
     app --> coreEngine
     app --> coreUi
+    app --> coreVoice
 ```
 
 `domain` and `core-ml`'s feature-extraction logic are Android-framework-free by design, ahead of a possible future Kotlin Multiplatform port. `core-engine`'s Kotlin side is a thin external-fun wrapper — all real logic (scene graph, smoothing, rendering) lives in C++, verified independently of the JNI boundary.
@@ -80,7 +90,22 @@ graph BT
 
 The ERASE gesture was actually redesigned mid-project: the first version (a loose fist) turned out to sit too close to the DRAW pinch shape in feature space and was hard to hold comfortably. It was replaced with two fingers held together, which is both geometrically farther from the pinch pose and more ergonomic — and required fully re-recording that class's training data rather than blending the two gesture shapes under one label.
 
-POINT followed a similar arc, but the lesson was about naming rather than feature space: it started life as `FLING`, pitched as a fast lateral swipe to step through the brush color/size carousels hands-free. The classifier recognized the pose fine, but direction had to be inferred from a handful of fingertip positions right before the pose registered, which proved too unreliable in practice (confirmed reversed on one carousel during on-device testing). Carousel navigation was rebuilt on dwell-based edge hovering instead — pure cursor position, no classification involved. Since the underlying pose was never actually a swipe — it's a static index-finger point, not a motion — the class was renamed to `POINT` to match what it actually is, and stays trained and recognized (shown via its own cursor icon) for a future use that needs a genuine static-pose signal.
+POINT followed a similar arc, but the lesson was about naming rather than feature space: it started life as `FLING`, pitched as a fast lateral swipe to step through the brush color/size carousels hands-free. The classifier recognized the pose fine, but direction had to be inferred from a handful of fingertip positions right before the pose registered, which proved too unreliable in practice (confirmed reversed on one carousel during on-device testing). Carousel navigation was rebuilt on dwell-based edge hovering instead — pure cursor position, no classification involved. Since the underlying pose was never actually a swipe — it's a static index-finger point, not a motion — the class was renamed to `POINT` to match what it actually is, and stayed trained and recognized (shown via its own cursor icon) with no real job for a while, kept on the bet that a genuine static-pose signal would eventually be useful.
+
+It was: `POINT`, held for a sustained ~500ms (`PointHoldGate`), is exactly the touchless push-to-talk trigger Phase 2's voice commands needed — deliberate enough not to fire by accident, and consistent with the "no touch input at all" pitch in a way an on-screen button never could be. A gesture that got renamed for honesty rather than removed turned out to be worth keeping.
+
+## Voice commands, with real numbers
+
+- **Activation:** hold `POINT` for ~500ms (`PointHoldGate`, a timer distinct from the gesture classifier's own 3-frame flicker debounce) to open a single-command listening window, or say "start listening" while activated to switch to continuous mode — no gesture needed per command until "stop listening" switches back. A small state machine (`VoiceActivationController`, `Idle` / `SingleShotListening` / `ContinuousListening`) owns this, remembering which mode a `POINT`-triggered interruption should return to afterward.
+- **Speech-to-text:** Android's built-in `createOnDeviceSpeechRecognizer` (API 33+) — forced on-device, no cloud fallback, no model of its own to bundle.
+- **Intent classification:** [LiteRT-LM](https://developers.google.com/edge/litert-lm) running a FunctionGemma-class model (~289MB, `litert-community/functiongemma-270m-ft-mobile-actions`) with native tool-calling — one `@Tool`-annotated Kotlin method per command (`setBrushColor`, `undo`, `setContinuousListening`, ...), so the model either calls exactly one (schema-validated by constrained decoding) or none at all. No tool call is the `Unrecognized` fallback, handled the same as a low-confidence result: no command executes, nothing crashes.
+- **Command set:** brush color, brush size, undo, redo, clear (routes through the same tap-to-confirm dialog as the trash button — a misheard destructive command still needs a confirming tap), save, start/stop continuous listening.
+- **Orchestration:** the listen → classify sequencing lives in `VoiceActivationOrchestrator` (`core-voice`), decoupled from the app layer specifically so it's unit-testable with mocked collaborators (MockK) rather than only verifiable on-device — applying a recognized command, updating UI, and advancing the state machine stay app-layer concerns kept out of it.
+- Unlike the 8KB gesture classifier, this model is **not** bundled as an APK asset or committed to git — it's gated behind Hugging Face's Gemma license and far over GitHub's 100MB file limit. See "Voice commands model setup" below.
+
+**Known limitation, stated plainly:** the mechanism is solid — LiteRT-LM's constrained decoding never produced malformed output across extensive testing, and every recognized command mapped to the exact right typed `Command`, every time. But this specific 270M "mobile-actions" fine-tune, evaluated against this project's custom command vocabulary (not the phone-assistant actions it was fine-tuned on), recognizes intent inconsistently — roughly a third to half of natural phrasings across repeated test runs, with some run-to-run variance on identical input even under greedy decoding. A system instruction with few-shot examples and consolidating near-duplicate tools (one `setContinuousListening(enabled)` instead of two separate start/stop tools) measurably helped without closing the gap. The lesson, consistent with the `mediapipe-litert-pipeline` skill's own findings: a small model fine-tuned for one tool vocabulary doesn't necessarily generalize to a different, custom one — worth knowing before betting a demo on it.
+
+**A real bug this surfaced, not an LLM problem:** the brush-color/size carousel's scroll position was only ever set from the selected value once, at initial composition (`rememberLazyListState(initialFirstVisibleItemScrollOffset = ...)`) — every prior caller (a tap, or the dwell-hover carousel stepper) happened to also move the carousel itself in the same code path, so nothing ever exposed the gap. Voice was the first caller to change the selection from genuinely outside the carousel's own interactions, and the swatch silently stopped tracking it. Fixed with a `LaunchedEffect(selected)` that re-centers the carousel whenever the selection changes for any reason — the kind of one-way-data-flow bug that's easy to ship because every existing test of the feature happens to go through the one path that masked it.
 
 ## The native core
 
@@ -92,11 +117,11 @@ POINT followed a similar arc, but the lesson was about naming rather than featur
 
 ## Testing
 
-TDD throughout, not retrofitted: **120 tests**, all passing.
+TDD throughout, not retrofitted: **144 tests**, all passing.
 
-- **71 Kotlin unit tests** (JUnit 5) across `domain` (61) and `core-ml` (10) — feature normalization, viewport/crop mapping, gesture smoothing, gesture-to-input-event mapping, the edge-dwell timer state machine — run on the JVM, no emulator needed.
+- **95 Kotlin unit tests** (JUnit 5) across `domain` (80), `core-ml` (10), and `core-voice` (5) — feature normalization, viewport/crop mapping, gesture smoothing, gesture-to-input-event mapping, the edge-dwell and point-hold timer state machines, the voice-activation state machine, and the STT→LLM orchestration (MockK-mocked collaborators, covering the recognized/unrecognized/capture-failed paths) — run on the JVM, no emulator needed.
 - **49 GoogleTest tests** for the C++ core (`scene/`, `render/`, `input/`), built and run completely independently of the Android/Gradle build via a host-side CMake project (`core-engine/src/test/cpp`) — the same scene graph (including snapshot-based undo/redo and the near-continuous-stroke merge), ribbon tessellation (including Catmull-Rom subdivision), and smoothing-filter logic that ships on-device, verified on the host machine in milliseconds.
-- Thin framework-glue code (CameraX wiring, the MediaPipe analyzer, the JNI marshaling layer) is intentionally not unit tested — it's verified by running on a physical device instead, which is where the real risk in that kind of code actually lives.
+- Thin framework-glue code (CameraX wiring, the MediaPipe analyzer, the JNI marshaling layer, `SpeechRecognizerSource`, `VoiceCommandClassifier`) is intentionally not unit tested — it's verified by running on a physical device instead, which is where the real risk in that kind of code actually lives. Only the pure sequencing logic sitting behind those framework-bound classes (`VoiceActivationOrchestrator`) gets mocked-collaborator unit tests.
 
 ## Performance
 
@@ -119,23 +144,21 @@ Requires a physical Android device (API 33+ — bumped from API 26+ in Phase 2 f
 To run the tests:
 
 ```bash
-./gradlew test                                              # 71 Kotlin unit tests
+./gradlew test                                              # 95 Kotlin unit tests
 cmake -S core-engine/src/test/cpp -B core-engine/build/host-tests
 cmake --build core-engine/build/host-tests
 ./core-engine/build/host-tests/gesture_canvas_core_tests      # 49 GoogleTest tests
 ```
 
-## Voice commands model (Phase 2, in progress)
+## Voice commands model setup
 
-Phase 2 adds on-device voice commands via [LiteRT-LM](https://developers.google.com/edge/litert-lm) running a FunctionGemma-class model (~289MB). Unlike the tiny 8KB gesture classifier above, this model is **not** bundled as an APK asset or committed to git — it's gated behind Hugging Face's Gemma license and far over GitHub's 100MB file limit. The app builds and runs fully without it; voice commands simply report unavailable until it's provided (see `VoiceCommandClassifier.isModelAvailable()`).
+The voice-command model isn't bundled with the repo (see "Voice commands, with real numbers" above for why) — the app builds and runs fully without it; voice commands simply report unavailable until it's provided (`VoiceCommandClassifier.isModelAvailable()`).
 
-To try voice commands once that feature is wired up:
+To try voice commands:
 
 1. Accept the Gemma license and download `mobile_actions_q8_ekv1024.litertlm` from Hugging Face: [litert-community/functiongemma-270m-ft-mobile-actions](https://huggingface.co/litert-community/functiongemma-270m-ft-mobile-actions) (the generic CPU/GPU variant — not the `_Google_Tensor_G5` one, which is pre-compiled for Pixel 10-series hardware specifically).
 2. Save it as `ml/models/mobile_actions_q8_ekv1024.litertlm` (gitignored — never committed).
 3. Run `./gradlew installDebug` as usual. A `pushVoiceModel` task runs automatically afterward, pushing the model to the device's app-external storage if it isn't already there (size-checked, so it's a fast no-op on every install after the first — no separate command to remember, and reinstalling doesn't re-push 280MB every time).
-
-**Known limitation:** the tool-calling mechanism itself is solid — LiteRT-LM's constrained decoding never produces malformed output, and every recognized command maps to the exact right typed `Command`. But this specific 270M "mobile-actions" fine-tune, evaluated against this project's custom command vocabulary (not the phone-assistant actions it was fine-tuned on), recognizes intent inconsistently — roughly a third to half of natural phrasings across repeated test runs, with some run-to-run variance on identical input even under greedy decoding. A system instruction with few-shot examples and consolidating near-duplicate tools (e.g. one `setContinuousListening(enabled)` instead of two separate start/stop tools) measurably helped but didn't close the gap. Worth revisiting once the full gesture-triggered flow is testable end-to-end with real speech rather than hardcoded transcripts — see the `mediapipe-litert-pipeline`-adjacent lesson-in-progress: a small model fine-tuned for one tool vocabulary doesn't necessarily generalize to a different, custom one.
 
 ## Tech stack
 
@@ -145,10 +168,11 @@ To try voice commands once that feature is wired up:
 | UI | Jetpack Compose, Compose BOM 2026.06.00 |
 | Camera | CameraX 1.5.1 |
 | Hand tracking | MediaPipe Tasks Vision 0.10.29 |
-| On-device inference | LiteRT (formerly TFLite) 2.1.5 |
+| On-device inference | LiteRT (formerly TFLite) 2.1.5, LiteRT-LM 0.16.0 |
+| Voice | Android `SpeechRecognizer` (on-device), FunctionGemma 270M via LiteRT-LM |
 | Native build | CMake 3.31.6, NDK 29 |
 | Logging | Timber |
-| Testing | JUnit 5, MockK, Turbine, GoogleTest |
+| Testing | JUnit 5, MockK, GoogleTest |
 | Formatting | Spotless + ktlint, enforced via a pre-commit hook |
 | Build | AGP 9.3.0, Gradle version catalogs |
 
