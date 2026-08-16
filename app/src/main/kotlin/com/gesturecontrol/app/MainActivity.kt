@@ -77,6 +77,9 @@ import com.gesturecontrol.core.ui.camera.GestureCursorOverlay
 import com.gesturecontrol.core.ui.camera.PIP_ASPECT_RATIO
 import com.gesturecontrol.core.ui.camera.PIP_DEFAULT_SIZE_FRACTION
 import com.gesturecontrol.core.ui.engine.NativeCanvasSurface
+import com.gesturecontrol.core.voice.SpeechRecognitionEvent
+import com.gesturecontrol.core.voice.SpeechRecognizerSource
+import com.gesturecontrol.core.voice.VoiceCommandClassifier
 import com.gesturecontrol.domain.gesture.GestureClass
 import com.gesturecontrol.domain.gesture.GestureInputMapper
 import com.gesturecontrol.domain.gesture.GestureSmoother
@@ -90,7 +93,11 @@ import com.gesturecontrol.domain.hand.toViewportNormalizedPoint
 import com.gesturecontrol.domain.training.RecordingProgress
 import com.gesturecontrol.domain.ui.DwellZone
 import com.gesturecontrol.domain.ui.EdgeDwellStepper
+import com.gesturecontrol.domain.voice.Command
+import com.gesturecontrol.domain.voice.PointHoldGate
+import com.gesturecontrol.domain.voice.VoiceActivationController
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.flow.firstOrNull
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import java.io.File
@@ -160,13 +167,30 @@ private fun GestureControlHost() {
     val cursorSmoother = remember { PositionSmoother() }
     val nativeEngine = remember { NativeEngine() }
     val edgeDwellStepper = remember { EdgeDwellStepper() }
+    val pointHoldGate = remember { PointHoldGate() }
+    val voiceActivationController = remember { VoiceActivationController() }
+    val speechRecognizerSource = remember { SpeechRecognizerSource(context) }
+    val voiceCommandClassifier = remember { VoiceCommandClassifier(context) }
     val coroutineScope = rememberCoroutineScope()
 
-    DisposableEffect(cameraController, analyzer, gestureClassifier) {
+    val micPermissionLauncher = rememberLauncherForActivityResult(
+        ActivityResultContracts.RequestPermission(),
+    ) {}
+    LaunchedEffect(Unit) {
+        if (ContextCompat.checkSelfPermission(context, Manifest.permission.RECORD_AUDIO) !=
+            PackageManager.PERMISSION_GRANTED
+        ) {
+            micPermissionLauncher.launch(Manifest.permission.RECORD_AUDIO)
+        }
+        voiceCommandClassifier.initialize()
+    }
+
+    DisposableEffect(cameraController, analyzer, gestureClassifier, voiceCommandClassifier) {
         onDispose {
             cameraController.unbindAndAwaitIdle()
             analyzer.close()
             gestureClassifier.close()
+            voiceCommandClassifier.close()
         }
     }
 
@@ -229,6 +253,49 @@ private fun GestureControlHost() {
         }
     }
 
+    fun applyVoiceCommand(command: Command) {
+        when (command) {
+            is Command.SetBrushColor -> {
+                BRUSH_COLOR_OPTIONS
+                    .firstOrNull { it.label.equals(command.color.name, ignoreCase = true) }
+                    ?.let(::selectBrushColor)
+            }
+
+            is Command.SetBrushSize -> {
+                BrushSizeOption.entries
+                    .firstOrNull { it.name == command.size.name }
+                    ?.let(::selectBrushSize)
+            }
+
+            Command.Undo -> {
+                nativeEngine.nativeUndo()
+                canUndo = nativeEngine.nativeCanUndo()
+                canRedo = nativeEngine.nativeCanRedo()
+            }
+
+            Command.Redo -> {
+                nativeEngine.nativeRedo()
+                canUndo = nativeEngine.nativeCanUndo()
+                canRedo = nativeEngine.nativeCanRedo()
+            }
+
+            Command.Clear -> showClearCanvasConfirmation = true
+            Command.Save -> saveAndShareDrawing()
+            Command.StartContinuousListening, Command.StopContinuousListening, Command.Unrecognized -> Unit
+        }
+    }
+
+    suspend fun runVoiceActivation(): Command? {
+        val event = speechRecognizerSource.listenOnce().firstOrNull() ?: return null
+        return when (event) {
+            is SpeechRecognitionEvent.Result -> voiceCommandClassifier.classify(event.transcript).also {
+                applyVoiceCommand(it)
+            }
+
+            is SpeechRecognitionEvent.Error -> null
+        }
+    }
+
     SideEffect {
         if (handDetectionResult.timestampMs == lastProcessedTimestampMs[0]) return@SideEffect
 
@@ -256,7 +323,24 @@ private fun GestureControlHost() {
             currentGesture = gestureSmoother.smooth(classified.gestureClass)
         }
 
+        // Fed every frame regardless of mode so its hold timer never sees a stale timestamp
+        // jump from a mode switch -- only acted on in Drawing mode, below, so a POINT held while
+        // recording training data (which happens constantly) never triggers voice listening.
+        val pointHoldTriggered = pointHoldGate.onFrame(currentGesture, handDetectionResult.timestampMs)
+
         if (appMode == AppMode.DRAWING) {
+            if (pointHoldTriggered) {
+                voiceActivationController.onPointHoldTriggered()
+                coroutineScope.launch {
+                    val command = runVoiceActivation()
+                    if (command != null) {
+                        voiceActivationController.onCommandCaptured(command)
+                    } else {
+                        voiceActivationController.onListeningTimeout()
+                    }
+                }
+            }
+
             // The camera preview is center-cropped to fill the screen, so the raw camera-image-
             // normalized fingertip position must be mapped through the same crop before it's used
             // as a drawing position, or it drifts from the visible fingertip away from center.
