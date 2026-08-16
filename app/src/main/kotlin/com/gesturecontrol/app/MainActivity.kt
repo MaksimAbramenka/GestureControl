@@ -76,6 +76,7 @@ import com.gesturecontrol.core.ui.camera.GestureCanvasScreen
 import com.gesturecontrol.core.ui.camera.GestureCursorOverlay
 import com.gesturecontrol.core.ui.camera.PIP_ASPECT_RATIO
 import com.gesturecontrol.core.ui.camera.PIP_DEFAULT_SIZE_FRACTION
+import com.gesturecontrol.core.ui.camera.VoiceActivationLabel
 import com.gesturecontrol.core.ui.engine.NativeCanvasSurface
 import com.gesturecontrol.core.voice.SpeechRecognitionEvent
 import com.gesturecontrol.core.voice.SpeechRecognizerSource
@@ -96,6 +97,7 @@ import com.gesturecontrol.domain.ui.EdgeDwellStepper
 import com.gesturecontrol.domain.voice.Command
 import com.gesturecontrol.domain.voice.PointHoldGate
 import com.gesturecontrol.domain.voice.VoiceActivationController
+import com.gesturecontrol.domain.voice.VoiceActivationState
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.firstOrNull
 import kotlinx.coroutines.launch
@@ -221,6 +223,9 @@ private fun GestureControlHost() {
     var sizeCarouselActiveEdge by remember { mutableStateOf<Int?>(null) }
     var canUndo by remember { mutableStateOf(false) }
     var canRedo by remember { mutableStateOf(false) }
+    var voiceActivationState by remember { mutableStateOf<VoiceActivationState>(VoiceActivationState.Idle) }
+    var lastVoiceTranscript by remember { mutableStateOf<String?>(null) }
+    var lastVoiceCommand by remember { mutableStateOf<Command?>(null) }
     val lastProcessedTimestampMs = remember { longArrayOf(-1L) }
 
     fun selectBrushColor(option: BrushColorOption) {
@@ -286,13 +291,31 @@ private fun GestureControlHost() {
     }
 
     suspend fun runVoiceActivation(): Command? {
-        val event = speechRecognizerSource.listenOnce().firstOrNull() ?: return null
+        val event = speechRecognizerSource.listenOnce().firstOrNull()
+        lastVoiceTranscript = (event as? SpeechRecognitionEvent.Result)?.transcript
         return when (event) {
             is SpeechRecognitionEvent.Result -> voiceCommandClassifier.classify(event.transcript).also {
                 applyVoiceCommand(it)
             }
 
-            is SpeechRecognitionEvent.Error -> null
+            is SpeechRecognitionEvent.Error, null -> null
+        }
+    }
+
+    suspend fun runOneVoiceActivationCycle() {
+        val command = runVoiceActivation()
+        lastVoiceCommand = command
+        if (command != null) {
+            voiceActivationController.onCommandCaptured(command)
+        } else {
+            voiceActivationController.onListeningTimeout()
+        }
+        voiceActivationState = voiceActivationController.state
+    }
+
+    LaunchedEffect(voiceActivationState is VoiceActivationState.ContinuousListening) {
+        while (voiceActivationState is VoiceActivationState.ContinuousListening) {
+            runOneVoiceActivationCycle()
         }
     }
 
@@ -331,14 +354,8 @@ private fun GestureControlHost() {
         if (appMode == AppMode.DRAWING) {
             if (pointHoldTriggered) {
                 voiceActivationController.onPointHoldTriggered()
-                coroutineScope.launch {
-                    val command = runVoiceActivation()
-                    if (command != null) {
-                        voiceActivationController.onCommandCaptured(command)
-                    } else {
-                        voiceActivationController.onListeningTimeout()
-                    }
-                }
+                voiceActivationState = voiceActivationController.state
+                coroutineScope.launch { runOneVoiceActivationCycle() }
             }
 
             // The camera preview is center-cropped to fill the screen, so the raw camera-image-
@@ -425,6 +442,15 @@ private fun GestureControlHost() {
                 gestureClass = currentGesture,
                 brushColor = selectedBrushColor.composeColor,
                 modifier = Modifier.fillMaxSize(),
+            )
+
+            VoiceActivationLabel(
+                activationState = voiceActivationState,
+                lastTranscript = lastVoiceTranscript,
+                lastCommand = lastVoiceCommand,
+                modifier = Modifier
+                    .align(Alignment.TopCenter)
+                    .padding(top = 8.dp),
             )
 
             BrushControls(
