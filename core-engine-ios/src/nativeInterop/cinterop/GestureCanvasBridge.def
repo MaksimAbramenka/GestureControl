@@ -1,0 +1,3 @@
+package = com.gesturecontrol.core.engine.ios.bridge
+headers = GestureCanvasBridge.h
+headerFilter = GestureCanvasBridge.h
