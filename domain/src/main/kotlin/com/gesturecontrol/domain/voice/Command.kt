@@ -11,7 +11,5 @@ sealed class Command {
     object Redo : Command()
     object Clear : Command()
     object Save : Command()
-    object StartContinuousListening : Command()
-    object StopContinuousListening : Command()
     object Unrecognized : Command()
 }

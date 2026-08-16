@@ -8,10 +8,18 @@ namespace gesture_canvas {
         brushR_ = r;
         brushG_ = g;
         brushB_ = b;
+        if (currentStroke_.has_value()) {
+            currentStroke_->r = r;
+            currentStroke_->g = g;
+            currentStroke_->b = b;
+        }
     }
 
     void SceneGraph::setBrushSize(float size) {
         brushSize_ = size;
+        if (currentStroke_.has_value()) {
+            currentStroke_->width = size;
+        }
     }
 
     void SceneGraph::submitInput(const InputEvent &event) {

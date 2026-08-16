@@ -6,25 +6,14 @@ class VoiceActivationController {
 
     fun onPointHoldTriggered() {
         if (state is VoiceActivationState.SingleShotListening) return
-        state = VoiceActivationState.SingleShotListening(previousState = state)
+        state = VoiceActivationState.SingleShotListening
     }
 
-    fun onCommandCaptured(command: Command) {
-        when (command) {
-            is Command.StartContinuousListening -> state = VoiceActivationState.ContinuousListening
-            is Command.StopContinuousListening -> state = VoiceActivationState.Idle
-            else -> returnFromSingleShot()
-        }
+    fun onCommandCaptured() {
+        state = VoiceActivationState.Idle
     }
 
     fun onListeningTimeout() {
-        returnFromSingleShot()
-    }
-
-    private fun returnFromSingleShot() {
-        val current = state
-        if (current is VoiceActivationState.SingleShotListening) {
-            state = current.previousState
-        }
+        state = VoiceActivationState.Idle
     }
 }

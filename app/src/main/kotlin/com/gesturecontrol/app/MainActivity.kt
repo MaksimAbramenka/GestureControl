@@ -190,12 +190,13 @@ private fun GestureControlHost() {
         voiceCommandClassifier.initialize()
     }
 
-    DisposableEffect(cameraController, analyzer, gestureClassifier, voiceCommandClassifier) {
+    DisposableEffect(cameraController, analyzer, gestureClassifier, voiceCommandClassifier, speechRecognizerSource) {
         onDispose {
             cameraController.unbindAndAwaitIdle()
             analyzer.close()
             gestureClassifier.close()
             voiceCommandClassifier.close()
+            speechRecognizerSource.close()
         }
     }
 
@@ -289,7 +290,7 @@ private fun GestureControlHost() {
 
             Command.Clear -> showClearCanvasConfirmation = true
             Command.Save -> saveAndShareDrawing()
-            Command.StartContinuousListening, Command.StopContinuousListening, Command.Unrecognized -> Unit
+            Command.Unrecognized -> Unit
         }
     }
 
@@ -299,7 +300,7 @@ private fun GestureControlHost() {
                 lastVoiceTranscript = result.transcript
                 lastVoiceCommand = result.command
                 applyVoiceCommand(result.command)
-                voiceActivationController.onCommandCaptured(result.command)
+                voiceActivationController.onCommandCaptured()
             }
 
             VoiceActivationResult.CaptureFailed -> {
@@ -309,12 +310,6 @@ private fun GestureControlHost() {
             }
         }
         voiceActivationState = voiceActivationController.state
-    }
-
-    LaunchedEffect(voiceActivationState is VoiceActivationState.ContinuousListening) {
-        while (voiceActivationState is VoiceActivationState.ContinuousListening) {
-            runOneVoiceActivationCycle()
-        }
     }
 
     SideEffect {

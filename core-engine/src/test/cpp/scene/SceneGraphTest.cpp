@@ -115,6 +115,22 @@ TEST(SceneGraphTest, BrushColorAndSizeApplyToNewStrokesOnly) {
     EXPECT_FLOAT_EQ(scene.strokes()[1].width, 0.05f);
 }
 
+TEST(SceneGraphTest, BrushColorAndSizeChangeMidStrokeUpdatesTheInProgressStroke) {
+    SceneGraph scene;
+    scene.submitInput(InputEvent{0.0f, 0.0f, InputEvent::State::DRAW_START, 1.0f, 0});
+    scene.submitInput(InputEvent{0.1f, 0.0f, InputEvent::State::DRAW_MOVE, 1.0f, 10});
+
+    scene.setBrushColor(1.0f, 0.0f, 0.0f);
+    scene.setBrushSize(0.05f);
+    scene.submitInput(InputEvent{0.2f, 0.0f, InputEvent::State::DRAW_MOVE, 1.0f, 20});
+    scene.submitInput(InputEvent{0.3f, 0.0f, InputEvent::State::DRAW_END, 1.0f, 30});
+
+    ASSERT_EQ(scene.strokes().size(), 1u);
+    EXPECT_FLOAT_EQ(scene.strokes()[0].r, 1.0f);
+    EXPECT_FLOAT_EQ(scene.strokes()[0].g, 0.0f);
+    EXPECT_FLOAT_EQ(scene.strokes()[0].width, 0.05f);
+}
+
 TEST(SceneGraphTest, StartingNewStrokeWhileDrawingFinalizesThePrevious) {
     SceneGraph scene;
     scene.submitInput(InputEvent{0.1f, 0.1f, InputEvent::State::DRAW_START, 1.0f, 0});

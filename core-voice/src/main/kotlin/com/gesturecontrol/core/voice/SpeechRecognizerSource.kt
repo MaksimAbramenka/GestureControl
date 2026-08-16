@@ -6,25 +6,37 @@ import android.os.Bundle
 import android.speech.RecognitionListener
 import android.speech.RecognizerIntent
 import android.speech.SpeechRecognizer
+import android.util.Log
 import kotlinx.coroutines.channels.awaitClose
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.callbackFlow
+import java.io.Closeable
+
+private const val TAG = "VoiceSTT"
 
 sealed class SpeechRecognitionEvent {
     data class Result(val transcript: String) : SpeechRecognitionEvent()
     data class Error(val code: Int) : SpeechRecognitionEvent()
 }
 
-class SpeechRecognizerSource(private val context: Context) {
+class SpeechRecognizerSource(private val context: Context) : Closeable {
+    private val recognizer: SpeechRecognizer? by lazy {
+        if (SpeechRecognizer.isOnDeviceRecognitionAvailable(context)) {
+            SpeechRecognizer.createOnDeviceSpeechRecognizer(context)
+        } else {
+            null
+        }
+    }
+
     fun listenOnce(): Flow<SpeechRecognitionEvent> = callbackFlow {
-        if (!SpeechRecognizer.isOnDeviceRecognitionAvailable(context)) {
+        val currentRecognizer = recognizer
+        if (currentRecognizer == null) {
             trySend(SpeechRecognitionEvent.Error(SpeechRecognizer.ERROR_CLIENT))
             close()
             return@callbackFlow
         }
 
-        val recognizer = SpeechRecognizer.createOnDeviceSpeechRecognizer(context)
-        recognizer.setRecognitionListener(
+        currentRecognizer.setRecognitionListener(
             object : RecognitionListener {
                 override fun onReadyForSpeech(params: Bundle?) = Unit
 
@@ -37,6 +49,7 @@ class SpeechRecognizerSource(private val context: Context) {
                 override fun onEndOfSpeech() = Unit
 
                 override fun onError(error: Int) {
+                    Log.d(TAG, "onError code=$error")
                     trySend(SpeechRecognitionEvent.Error(error))
                     close()
                 }
@@ -46,6 +59,7 @@ class SpeechRecognizerSource(private val context: Context) {
                         .getStringArrayList(SpeechRecognizer.RESULTS_RECOGNITION)
                         ?.firstOrNull()
                         .orEmpty()
+                    Log.d(TAG, "onResults transcript='$transcript'")
                     trySend(SpeechRecognitionEvent.Result(transcript))
                     close()
                 }
@@ -56,15 +70,16 @@ class SpeechRecognizerSource(private val context: Context) {
             },
         )
 
-        recognizer.startListening(
+        currentRecognizer.startListening(
             Intent(RecognizerIntent.ACTION_RECOGNIZE_SPEECH).apply {
                 putExtra(RecognizerIntent.EXTRA_LANGUAGE_MODEL, RecognizerIntent.LANGUAGE_MODEL_FREE_FORM)
             },
         )
 
-        awaitClose {
-            recognizer.stopListening()
-            recognizer.destroy()
-        }
+        awaitClose { currentRecognizer.stopListening() }
+    }
+
+    override fun close() {
+        recognizer?.destroy()
     }
 }

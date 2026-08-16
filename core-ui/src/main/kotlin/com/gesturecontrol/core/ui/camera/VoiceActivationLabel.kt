@@ -25,7 +25,6 @@ fun VoiceActivationLabel(
     val text = when (activationState) {
         is VoiceActivationState.Idle -> lastResultText(lastTranscript, lastCommand)
         is VoiceActivationState.SingleShotListening -> "Listening..."
-        is VoiceActivationState.ContinuousListening -> "Listening (continuous)..."
     }
     Text(
         text = text,
@@ -54,7 +53,5 @@ private fun Command.toDisplayLabel(): String? = when (this) {
     Command.Redo -> "redo"
     Command.Clear -> "clear"
     Command.Save -> "save"
-    Command.StartContinuousListening -> "continuous listening on"
-    Command.StopContinuousListening -> "continuous listening off"
     Command.Unrecognized -> null
 }
