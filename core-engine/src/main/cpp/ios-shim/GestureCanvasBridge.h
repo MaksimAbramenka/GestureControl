@@ -43,6 +43,21 @@ float gc_scene_stroke_g(const GCSceneGraph *scene, int32_t stroke_index);
 float gc_scene_stroke_b(const GCSceneGraph *scene, int32_t stroke_index);
 float gc_scene_stroke_width(const GCSceneGraph *scene, int32_t stroke_index);
 
+typedef struct GCRenderer GCRenderer;
+
+GCRenderer *gc_renderer_create(void);
+void gc_renderer_destroy(GCRenderer *renderer);
+
+// Sets up an offscreen EAGL context and an FBO of the given size, and compiles/links the stroke
+// shader program. Must be called (and succeed) before gc_renderer_draw/gc_renderer_capture.
+bool gc_renderer_init(GCRenderer *renderer, int32_t width, int32_t height);
+
+void gc_renderer_draw(GCRenderer *renderer, const GCSceneGraph *scene);
+
+// Reads back the rendered frame as top-down RGBA8 pixels into out_pixels, which must be at least
+// width * height * 4 bytes (the size passed to gc_renderer_init). Returns false on failure.
+bool gc_renderer_capture(const GCRenderer *renderer, uint8_t *out_pixels, int32_t buffer_size);
+
 #ifdef __cplusplus
 }
 #endif

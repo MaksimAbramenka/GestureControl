@@ -1,12 +1,7 @@
 #include "render/StrokeRenderer.h"
 
-#include <GLES3/gl3.h>
-#include <android/log.h>
-
+#include "render/GLCompat.h"
 #include "render/RibbonTessellator.h"
-
-#define LOG_TAG "GestureCanvasCore"
-#define LOGE(...) __android_log_print(ANDROID_LOG_ERROR, LOG_TAG, __VA_ARGS__)
 
 namespace {
 

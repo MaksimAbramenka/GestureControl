@@ -1,10 +1,18 @@
 #include "ios-shim/GestureCanvasBridge.h"
 
+#include <cstring>
+#include <vector>
+
 #include "input/InputEvent.h"
+#include "ios-shim/EaglContext.h"
+#include "render/GLCompat.h"
+#include "render/StrokeRenderer.h"
 #include "scene/SceneGraph.h"
 
+using gesture_canvas::EaglContext;
 using gesture_canvas::InputEvent;
 using gesture_canvas::SceneGraph;
+using gesture_canvas::StrokeRenderer;
 
 struct GCSceneGraph {
     SceneGraph scene;
@@ -102,6 +110,96 @@ float gc_scene_stroke_width(const GCSceneGraph *scene, int32_t stroke_index) {
     auto strokes = scene->scene.visibleStrokes();
     if (stroke_index < 0 || static_cast<size_t>(stroke_index) >= strokes.size()) return 0.0f;
     return strokes[stroke_index].width;
+}
+
+}  // extern "C"
+
+struct GCRenderer {
+    EaglContext eagl;
+    StrokeRenderer renderer;
+    GLuint framebuffer = 0;
+    GLuint colorRenderbuffer = 0;
+    int32_t width = 0;
+    int32_t height = 0;
+    bool ready = false;
+};
+
+extern "C" {
+
+GCRenderer *gc_renderer_create(void) {
+    return new GCRenderer();
+}
+
+void gc_renderer_destroy(GCRenderer *renderer) {
+    if (renderer == nullptr) return;
+    if (renderer->ready && renderer->eagl.makeCurrent()) {
+        if (renderer->colorRenderbuffer != 0) glDeleteRenderbuffers(1, &renderer->colorRenderbuffer);
+        if (renderer->framebuffer != 0) glDeleteFramebuffers(1, &renderer->framebuffer);
+    }
+    delete renderer;
+}
+
+bool gc_renderer_init(GCRenderer *renderer, int32_t width, int32_t height) {
+    if (renderer == nullptr || width <= 0 || height <= 0) return false;
+
+    if (!renderer->eagl.init() || !renderer->eagl.makeCurrent()) {
+        LOGE("EaglContext init/makeCurrent failed");
+        return false;
+    }
+
+    glGenFramebuffers(1, &renderer->framebuffer);
+    glBindFramebuffer(GL_FRAMEBUFFER, renderer->framebuffer);
+
+    glGenRenderbuffers(1, &renderer->colorRenderbuffer);
+    glBindRenderbuffer(GL_RENDERBUFFER, renderer->colorRenderbuffer);
+    glRenderbufferStorage(GL_RENDERBUFFER, GL_RGBA8, width, height);
+    glFramebufferRenderbuffer(
+        GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_RENDERBUFFER, renderer->colorRenderbuffer);
+
+    if (glCheckFramebufferStatus(GL_FRAMEBUFFER) != GL_FRAMEBUFFER_COMPLETE) {
+        LOGE("Offscreen framebuffer incomplete");
+        return false;
+    }
+
+    if (!renderer->renderer.init()) {
+        LOGE("StrokeRenderer init failed");
+        return false;
+    }
+    renderer->renderer.resize(width, height);
+
+    renderer->width = width;
+    renderer->height = height;
+    renderer->ready = true;
+    return true;
+}
+
+void gc_renderer_draw(GCRenderer *renderer, const GCSceneGraph *scene) {
+    if (renderer == nullptr || scene == nullptr || !renderer->ready) return;
+    if (!renderer->eagl.makeCurrent()) return;
+
+    glBindFramebuffer(GL_FRAMEBUFFER, renderer->framebuffer);
+    renderer->renderer.draw(scene->scene.visibleStrokes());
+}
+
+bool gc_renderer_capture(const GCRenderer *renderer, uint8_t *out_pixels, int32_t buffer_size) {
+    if (renderer == nullptr || out_pixels == nullptr || !renderer->ready) return false;
+    const auto requiredSize = static_cast<int64_t>(renderer->width) * renderer->height * 4;
+    if (buffer_size < requiredSize) return false;
+    if (!renderer->eagl.makeCurrent()) return false;
+
+    glBindFramebuffer(GL_FRAMEBUFFER, renderer->framebuffer);
+
+    std::vector<uint8_t> pixels(static_cast<size_t>(requiredSize));
+    glReadPixels(0, 0, renderer->width, renderer->height, GL_RGBA, GL_UNSIGNED_BYTE, pixels.data());
+
+    // glReadPixels is bottom-up; flip to top-down to match a conventional image buffer.
+    const auto rowBytes = static_cast<size_t>(renderer->width) * 4;
+    for (int row = 0; row < renderer->height; ++row) {
+        const uint8_t *src = pixels.data() + static_cast<size_t>(renderer->height - 1 - row) * rowBytes;
+        uint8_t *dst = out_pixels + static_cast<size_t>(row) * rowBytes;
+        std::memcpy(dst, src, rowBytes);
+    }
+    return true;
 }
 
 }  // extern "C"
