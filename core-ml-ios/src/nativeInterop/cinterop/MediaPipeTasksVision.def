@@ -1,0 +1,3 @@
+language = Objective-C
+package = com.gesturecontrol.core.ml.ios.mediapipe
+modules = MediaPipeTasksVision
