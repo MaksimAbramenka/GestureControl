@@ -24,3 +24,7 @@ ml/__pycache__/
 ml/models/*.litertlm
 
 core-ml-ios/vendor/
+
+iosApp/GestureControlApp.xcodeproj/
+iosApp/*.xcuserdatad/
+iosApp/GestureControlApp/Info.plist

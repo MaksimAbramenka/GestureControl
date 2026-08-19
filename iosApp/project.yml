@@ -1,0 +1,32 @@
+name: GestureControlApp
+options:
+  bundleIdPrefix: com.gesturecontrol
+  deploymentTarget:
+    iOS: "15.0"
+settings:
+  base:
+    SWIFT_VERSION: 6.0
+    IPHONEOS_DEPLOYMENT_TARGET: "15.0"
+targets:
+  GestureControlApp:
+    type: application
+    platform: iOS
+    sources:
+      - path: GestureControlApp
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.gesturecontrol.app
+        FRAMEWORK_SEARCH_PATHS:
+          - "$(PROJECT_DIR)/../iosShared/build/bin/iosSimulatorArm64/debugFramework"
+          - "$(PROJECT_DIR)/../iosShared/build/bin/iosArm64/debugFramework"
+        LD_RUNPATH_SEARCH_PATHS:
+          - "$(inherited) @executable_path/Frameworks"
+        OTHER_LDFLAGS:
+          - "-framework"
+          - "GestureControlKit"
+        ENABLE_USER_SCRIPT_SANDBOXING: NO
+    info:
+      path: GestureControlApp/Info.plist
+      properties:
+        UILaunchScreen: {}
+        NSCameraUsageDescription: "GestureControl uses the camera to track hand gestures for drawing."
