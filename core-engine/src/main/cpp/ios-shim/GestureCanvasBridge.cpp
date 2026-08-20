@@ -37,7 +37,8 @@ void gc_scene_set_brush_size(GCSceneGraph *scene, float size) {
 }
 
 void gc_scene_submit_input(
-    GCSceneGraph *scene, float x, float y, int32_t state, float pressure, int64_t timestamp_ms) {
+        GCSceneGraph *scene, float x, float y, int32_t state, float pressure,
+        int64_t timestamp_ms) {
     InputEvent event{x, y, static_cast<InputEvent::State>(state), pressure, timestamp_ms};
     scene->scene.submitInput(event);
 }
@@ -72,7 +73,8 @@ int32_t gc_scene_stroke_point_count(const GCSceneGraph *scene, int32_t stroke_in
     return static_cast<int32_t>(strokes[stroke_index].points.size());
 }
 
-float gc_scene_stroke_point_x(const GCSceneGraph *scene, int32_t stroke_index, int32_t point_index) {
+float
+gc_scene_stroke_point_x(const GCSceneGraph *scene, int32_t stroke_index, int32_t point_index) {
     auto strokes = scene->scene.visibleStrokes();
     if (stroke_index < 0 || static_cast<size_t>(stroke_index) >= strokes.size()) return 0.0f;
     const auto &points = strokes[stroke_index].points;
@@ -80,7 +82,8 @@ float gc_scene_stroke_point_x(const GCSceneGraph *scene, int32_t stroke_index, i
     return points[point_index].x;
 }
 
-float gc_scene_stroke_point_y(const GCSceneGraph *scene, int32_t stroke_index, int32_t point_index) {
+float
+gc_scene_stroke_point_y(const GCSceneGraph *scene, int32_t stroke_index, int32_t point_index) {
     auto strokes = scene->scene.visibleStrokes();
     if (stroke_index < 0 || static_cast<size_t>(stroke_index) >= strokes.size()) return 0.0f;
     const auto &points = strokes[stroke_index].points;
@@ -133,7 +136,8 @@ GCRenderer *gc_renderer_create(void) {
 void gc_renderer_destroy(GCRenderer *renderer) {
     if (renderer == nullptr) return;
     if (renderer->ready && renderer->eagl.makeCurrent()) {
-        if (renderer->colorRenderbuffer != 0) glDeleteRenderbuffers(1, &renderer->colorRenderbuffer);
+        if (renderer->colorRenderbuffer != 0)
+            glDeleteRenderbuffers(1, &renderer->colorRenderbuffer);
         if (renderer->framebuffer != 0) glDeleteFramebuffers(1, &renderer->framebuffer);
     }
     delete renderer;
@@ -154,7 +158,7 @@ bool gc_renderer_init(GCRenderer *renderer, int32_t width, int32_t height) {
     glBindRenderbuffer(GL_RENDERBUFFER, renderer->colorRenderbuffer);
     glRenderbufferStorage(GL_RENDERBUFFER, GL_RGBA8, width, height);
     glFramebufferRenderbuffer(
-        GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_RENDERBUFFER, renderer->colorRenderbuffer);
+            GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_RENDERBUFFER, renderer->colorRenderbuffer);
 
     if (glCheckFramebufferStatus(GL_FRAMEBUFFER) != GL_FRAMEBUFFER_COMPLETE) {
         LOGE("Offscreen framebuffer incomplete");
@@ -195,11 +199,68 @@ bool gc_renderer_capture(const GCRenderer *renderer, uint8_t *out_pixels, int32_
     // glReadPixels is bottom-up; flip to top-down to match a conventional image buffer.
     const auto rowBytes = static_cast<size_t>(renderer->width) * 4;
     for (int row = 0; row < renderer->height; ++row) {
-        const uint8_t *src = pixels.data() + static_cast<size_t>(renderer->height - 1 - row) * rowBytes;
+        const uint8_t *src =
+                pixels.data() + static_cast<size_t>(renderer->height - 1 - row) * rowBytes;
         uint8_t *dst = out_pixels + static_cast<size_t>(row) * rowBytes;
         std::memcpy(dst, src, rowBytes);
     }
     return true;
+}
+
+bool gc_renderer_init_onscreen(
+        GCRenderer *renderer, void *ca_layer, int32_t *out_width, int32_t *out_height) {
+    if (renderer == nullptr || ca_layer == nullptr) return false;
+
+    if (!renderer->eagl.init() || !renderer->eagl.makeCurrent()) {
+        LOGE("EaglContext init/makeCurrent failed");
+        return false;
+    }
+
+    glGenFramebuffers(1, &renderer->framebuffer);
+    glBindFramebuffer(GL_FRAMEBUFFER, renderer->framebuffer);
+
+    glGenRenderbuffers(1, &renderer->colorRenderbuffer);
+    glBindRenderbuffer(GL_RENDERBUFFER, renderer->colorRenderbuffer);
+    if (!renderer->eagl.bindDrawable(ca_layer)) {
+        LOGE("EaglContext bindDrawable failed");
+        return false;
+    }
+    glFramebufferRenderbuffer(
+            GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_RENDERBUFFER, renderer->colorRenderbuffer);
+
+    GLint width = 0;
+    GLint height = 0;
+    glGetRenderbufferParameteriv(GL_RENDERBUFFER, GL_RENDERBUFFER_WIDTH, &width);
+    glGetRenderbufferParameteriv(GL_RENDERBUFFER, GL_RENDERBUFFER_HEIGHT, &height);
+    if (width <= 0 || height <= 0) {
+        LOGE("Drawable-bound renderbuffer has no size");
+        return false;
+    }
+
+    if (glCheckFramebufferStatus(GL_FRAMEBUFFER) != GL_FRAMEBUFFER_COMPLETE) {
+        LOGE("On-screen framebuffer incomplete");
+        return false;
+    }
+
+    if (!renderer->renderer.init()) {
+        LOGE("StrokeRenderer init failed");
+        return false;
+    }
+    renderer->renderer.resize(width, height);
+
+    renderer->width = width;
+    renderer->height = height;
+    renderer->ready = true;
+    if (out_width != nullptr) *out_width = width;
+    if (out_height != nullptr) *out_height = height;
+    return true;
+}
+
+bool gc_renderer_present(const GCRenderer *renderer) {
+    if (renderer == nullptr || !renderer->ready) return false;
+    if (!renderer->eagl.makeCurrent()) return false;
+    glBindRenderbuffer(GL_RENDERBUFFER, renderer->colorRenderbuffer);
+    return renderer->eagl.presentRenderbuffer();
 }
 
 }  // extern "C"

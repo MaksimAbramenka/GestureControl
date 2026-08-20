@@ -14,7 +14,9 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.viewinterop.UIKitView
 import androidx.compose.ui.window.ComposeUIViewController
+import com.gesturecontrol.core.engine.ios.GestureCanvasView
 import com.gesturecontrol.core.ui.camera.BRUSH_COLOR_OPTIONS
 import com.gesturecontrol.core.ui.camera.BrushControls
 import com.gesturecontrol.core.ui.camera.BrushSizeOption
@@ -29,6 +31,10 @@ fun MainViewController(): UIViewController = ComposeUIViewController {
     var selectedSize by remember { mutableStateOf(BrushSizeOption.MEDIUM) }
 
     Box(modifier = Modifier.fillMaxSize().background(Color.DarkGray)) {
+        UIKitView(
+            factory = { GestureCanvasView() },
+            modifier = Modifier.fillMaxSize(),
+        )
         Column(
             modifier = Modifier.align(Alignment.TopStart).padding(16.dp),
             verticalArrangement = Arrangement.spacedBy(8.dp),

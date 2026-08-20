@@ -26,6 +26,7 @@ val cppSources = listOf(
 )
 val objcppSources = listOf(
     "ios-shim/EaglContext.mm",
+    "ios-shim/GCRenderView.mm",
 )
 
 fun runCommand(vararg command: String): Pair<Int, String> {
