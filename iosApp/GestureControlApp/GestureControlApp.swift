@@ -5,14 +5,16 @@ import GestureControlKit
 struct GestureControlApp: App {
     var body: some Scene {
         WindowGroup {
-            ContentView()
+            ComposeView().ignoresSafeArea()
         }
     }
 }
 
-struct ContentView: View {
-    var body: some View {
-        Text(GestureControlKit.shared.statusMessage())
-            .padding()
+struct ComposeView: UIViewControllerRepresentable {
+    func makeUIViewController(context: Context) -> UIViewController {
+        MainViewControllerKt.MainViewController()
+    }
+
+    func updateUIViewController(_ uiViewController: UIViewController, context: Context) {
     }
 }

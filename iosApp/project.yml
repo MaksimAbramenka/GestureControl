@@ -30,3 +30,6 @@ targets:
       properties:
         UILaunchScreen: {}
         NSCameraUsageDescription: "GestureControl uses the camera to track hand gestures for drawing."
+        # Required by Compose Multiplatform's iOS renderer -- without it, frame pacing is capped
+        # below the display's real refresh rate on ProMotion iPhones.
+        CADisableMinimumFrameDurationOnPhone: true

@@ -2,6 +2,8 @@ import org.jetbrains.kotlin.gradle.plugin.mpp.apple.XCFrameworkConfig
 
 plugins {
     alias(libs.plugins.kotlin.multiplatform)
+    alias(libs.plugins.compose.multiplatform)
+    alias(libs.plugins.kotlin.compose)
 }
 
 kotlin {
@@ -25,6 +27,7 @@ kotlin {
             implementation(project(":core-engine-ios"))
             implementation(project(":core-ml-ios"))
             implementation(project(":core-camera-ios"))
+            implementation(project(":core-ui"))
         }
         commonTest.dependencies {
             implementation(kotlin("test"))
