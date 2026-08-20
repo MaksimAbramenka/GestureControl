@@ -9,6 +9,9 @@ kotlin {
     iosSimulatorArm64()
 
     sourceSets {
+        commonMain.dependencies {
+            implementation(project(":domain"))
+        }
         commonTest.dependencies {
             implementation(kotlin("test"))
         }

@@ -21,6 +21,7 @@ import platform.CoreVideo.kCVPixelBufferPixelFormatTypeKey
 import platform.CoreVideo.kCVPixelFormatType_32BGRA
 import platform.Foundation.NSError
 import platform.darwin.NSObject
+import platform.darwin.dispatch_async
 import platform.darwin.dispatch_queue_create
 
 /**
@@ -76,12 +77,16 @@ class IosCameraCapture(
         isConfigured = true
     }
 
+    /** `startRunning`/`stopRunning` are blocking calls -- Apple's own guidance is to never call
+     * them on the main thread, since they can take long enough to visibly stall the UI, and
+     * (observed here) can corrupt an unrelated CADisplayLink-driven render loop (Compose's Metal
+     * redrawer) via run-loop re-entrancy if the caller is on main. */
     fun start() {
-        if (!session.running) session.startRunning()
+        dispatch_async(outputQueue) { if (!session.running) session.startRunning() }
     }
 
     fun stop() {
-        if (session.running) session.stopRunning()
+        dispatch_async(outputQueue) { if (session.running) session.stopRunning() }
     }
 
     override fun captureOutput(

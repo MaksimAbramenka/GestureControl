@@ -21,12 +21,86 @@ targets:
         FRAMEWORK_SEARCH_PATHS:
           - "$(PROJECT_DIR)/../iosShared/build/bin/iosSimulatorArm64/debugFramework"
           - "$(PROJECT_DIR)/../iosShared/build/bin/iosArm64/debugFramework"
-        LD_RUNPATH_SEARCH_PATHS:
-          - "$(inherited) @executable_path/Frameworks"
+        # A Kotlin/Native *static* framework (GestureControlKit, isStatic = true) doesn't embed
+        # its own framework dependencies' symbols -- only what it -force_load'd (MediaPipe's C++
+        # graph runtime) is actually baked in. Its plain Objective-C classes (MPPHandLandmarker
+        # etc.) still need MediaPipeTasksVision/Common linked again here, at the final app link,
+        # mirroring iosShared/build.gradle.kts's own linkerOpts for the same reason documented
+        # there (Kotlin/Native doesn't inherit linker flags transitively either).
         OTHER_LDFLAGS:
           - "-framework"
           - "GestureControlKit"
+          - "-framework"
+          - "MediaPipeTasksVision"
+          - "-framework"
+          - "MediaPipeTasksCommon"
+          - "-framework"
+          - "AudioToolbox"
+          - "-framework"
+          - "Accelerate"
+          - "-framework"
+          - "CoreMedia"
+          - "-framework"
+          - "AssetsLibrary"
+          - "-framework"
+          - "CoreFoundation"
+          - "-framework"
+          - "CoreGraphics"
+          - "-framework"
+          - "CoreImage"
+          - "-framework"
+          - "QuartzCore"
+          - "-framework"
+          - "AVFoundation"
+          - "-framework"
+          - "CoreVideo"
+          - "-framework"
+          - "OpenGLES"
+          - "-framework"
+          - "Metal"
+          - "-framework"
+          - "Security"
+          - "-lc++"
+        LD_RUNPATH_SEARCH_PATHS:
+          - "$(inherited) @executable_path/Frameworks"
         ENABLE_USER_SCRIPT_SANDBOXING: NO
+        # MediaPipeTasksVision/Common ship as per-slice xcframework directories, so the search
+        # path (unlike the flags above) has to differ by SDK.
+        FRAMEWORK_SEARCH_PATHS[sdk=iphonesimulator*]:
+          - "$(inherited)"
+          - "$(PROJECT_DIR)/../core-ml-ios/vendor/MediaPipeTasksVision/frameworks/MediaPipeTasksVision.xcframework/ios-arm64_x86_64-simulator"
+          - "$(PROJECT_DIR)/../core-ml-ios/vendor/MediaPipeTasksCommon/frameworks/MediaPipeTasksCommon.xcframework/ios-arm64_x86_64-simulator"
+        FRAMEWORK_SEARCH_PATHS[sdk=iphoneos*]:
+          - "$(inherited)"
+          - "$(PROJECT_DIR)/../core-ml-ios/vendor/MediaPipeTasksVision/frameworks/MediaPipeTasksVision.xcframework/ios-arm64"
+          - "$(PROJECT_DIR)/../core-ml-ios/vendor/MediaPipeTasksCommon/frameworks/MediaPipeTasksCommon.xcframework/ios-arm64"
+        # Per MediaPipeTasksCommon's actual podspec (user_target_xcconfig): the graph runtime's
+        # abseil/protobuf/TFLite symbols live ONLY in this force-loaded .a, not in the plain
+        # MediaPipeTasksCommon.framework archive above -- force-loading it inside GestureControlKit
+        # itself (Gradle side) wasn't enough, since a static framework doesn't re-export what it
+        # force_loaded to ITS OWN consumers; the final app link needs it again, directly.
+        # Every MPP*Options/MPP*Result wrapper class (plus NSString) has a paired "+Helpers.o"
+        # implementing its proto-conversion Objective-C category (e.g. copyToProto:) -- categories
+        # create no ordinary linker-visible reference, so a normal link silently drops these,
+        # crashing at runtime the first time real code exercises one ("unrecognized selector", or
+        # MediaPipe's own "One of copyTo*Proto: methods must be implemented..." assertion). The
+        # usual fix, -ObjC, force-loads *every* ObjC-containing member of
+        # MediaPipeTasksCommon.framework, including unrelated text-generation modules that need a
+        # litert_lm library nobody vendored here -- so core-ml-ios's extractHelpersCategories*
+        # Gradle tasks (run those before building this Xcode project) bundle every "+Helpers.o"
+        # into one small archive, force-loaded directly instead.
+        OTHER_LDFLAGS[sdk=iphonesimulator*]:
+          - "$(inherited)"
+          - "-force_load"
+          - "$(PROJECT_DIR)/../core-ml-ios/vendor/MediaPipeTasksCommon/frameworks/graph_libraries/libMediaPipeTasksCommon_simulator_graph.a"
+          - "-force_load"
+          - "$(PROJECT_DIR)/../core-ml-ios/vendor/MediaPipeTasksCommon/extracted/ios-arm64_x86_64-simulator/libMediaPipeHelpers.a"
+        OTHER_LDFLAGS[sdk=iphoneos*]:
+          - "$(inherited)"
+          - "-force_load"
+          - "$(PROJECT_DIR)/../core-ml-ios/vendor/MediaPipeTasksCommon/frameworks/graph_libraries/libMediaPipeTasksCommon_device_graph.a"
+          - "-force_load"
+          - "$(PROJECT_DIR)/../core-ml-ios/vendor/MediaPipeTasksCommon/extracted/ios-arm64/libMediaPipeHelpers.a"
     info:
       path: GestureControlApp/Info.plist
       properties:

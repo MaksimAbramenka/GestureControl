@@ -95,6 +95,74 @@ val fetchMediaPipeCommon = registerVendorFetchTask(
     "frameworks/MediaPipeTasksCommon.xcframework/ios-arm64/MediaPipeTasksCommon.framework/Info.plist",
 )
 
+// Every MPP*Options/MPP*Result wrapper class (plus NSString) has a paired "+Helpers.o" archive
+// member implementing its proto-conversion category (e.g. +[NSString(Helpers) uuidString],
+// -[MPPHandLandmarkerOptions(Helpers) copyToProto:]) that real code calls into at runtime.
+// Objective-C categories create no ordinary linker-visible symbol reference, so a normal
+// (non -ObjC) static link silently drops these .o's -- crashing at runtime the first time a task
+// actually exercises one ("unrecognized selector", or MediaPipe's own "One of copyTo*Proto:
+// methods must be implemented..." assertion). The usual fix is -ObjC, but that force-loads *every*
+// ObjC-containing member of MediaPipeTasksCommon.framework, including unrelated text-generation
+// modules (text_summarizer, text_proofreader) that need a litert_lm library nobody vendored here.
+// Instead, extract every self-contained "+Helpers.o" member (checked: none reference litert_lm)
+// into one small combined archive and force_load *that* directly at the app level
+// (iosApp/project.yml), for the same "K/N doesn't inherit linker flags transitively" reason
+// documented elsewhere in this repo.
+fun registerExtractHelpersCategoriesTask(taskName: String, frameworkSliceDir: String) =
+    tasks.register(taskName) {
+        dependsOn(fetchMediaPipeCommon)
+        val frameworkBinary = vendorDir.file(
+            "MediaPipeTasksCommon/frameworks/MediaPipeTasksCommon.xcframework/$frameworkSliceDir/MediaPipeTasksCommon.framework/MediaPipeTasksCommon",
+        ).asFile
+        val outputDir = vendorDir.dir("MediaPipeTasksCommon/extracted/$frameworkSliceDir").asFile
+        val libFile = File(outputDir, "libMediaPipeHelpers.a")
+        outputs.file(libFile)
+        doLast {
+            outputDir.deleteRecursively()
+            outputDir.mkdirs()
+
+            // The simulator slice is a fat (arm64 + x86_64) binary; ar can't read those directly.
+            val (infoExit, infoOutput) = runCommand("lipo", "-info", frameworkBinary.path)
+            check(infoExit == 0) { "lipo -info failed for $frameworkSliceDir:\n$infoOutput" }
+            val arInput = if (infoOutput.contains("Non-fat")) {
+                frameworkBinary
+            } else {
+                val thinFile = File(outputDir, "MediaPipeTasksCommon.arm64")
+                val (thinExit, thinOutput) =
+                    runCommand("lipo", "-thin", "arm64", frameworkBinary.path, "-output", thinFile.path)
+                check(thinExit == 0) { "lipo -thin arm64 failed for $frameworkSliceDir:\n$thinOutput" }
+                thinFile
+            }
+
+            val (listExit, listOutput) = runCommand("ar", "t", arInput.path)
+            check(listExit == 0) { "Listing members failed for $frameworkSliceDir:\n$listOutput" }
+            val members = listOutput.lines().map { it.trim() }.filter { it.endsWith("+Helpers.o") }
+            check(members.isNotEmpty()) { "No +Helpers.o members found in $arInput" }
+
+            for (member in members) {
+                val process = ProcessBuilder("ar", "-x", arInput.path, member)
+                    .directory(outputDir)
+                    .redirectErrorStream(true)
+                    .start()
+                val output = process.inputStream.bufferedReader().readText()
+                check(process.waitFor() == 0) { "Extracting $member for $frameworkSliceDir failed:\n$output" }
+            }
+
+            val objectFiles = outputDir.listFiles { f -> f.extension == "o" }.orEmpty()
+            val (arExit, arOutput) = runCommand(
+                "ar",
+                "-rcs",
+                libFile.path,
+                *objectFiles.map { it.path }.toTypedArray(),
+            )
+            check(arExit == 0) { "Archiving $libFile failed:\n$arOutput" }
+        }
+    }
+
+val extractHelpersCategoriesSimulator =
+    registerExtractHelpersCategoriesTask("extractHelpersCategoriesSimulator", "ios-arm64_x86_64-simulator")
+val extractHelpersCategoriesDevice = registerExtractHelpersCategoriesTask("extractHelpersCategoriesDevice", "ios-arm64")
+
 val systemFrameworks = listOf(
     "AudioToolbox", "Accelerate", "CoreMedia", "AssetsLibrary", "CoreFoundation",
     "CoreGraphics", "CoreImage", "QuartzCore", "AVFoundation", "CoreVideo",

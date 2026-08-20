@@ -6,6 +6,8 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
+import androidx.compose.runtime.DisposableEffect
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -23,6 +25,7 @@ import com.gesturecontrol.core.ui.camera.BrushSizeOption
 import com.gesturecontrol.core.ui.camera.FpsLabel
 import com.gesturecontrol.core.ui.camera.GestureStateLabel
 import com.gesturecontrol.domain.gesture.GestureClass
+import platform.Foundation.NSBundle
 import platform.UIKit.UIViewController
 
 @Suppress("FunctionName")
@@ -30,9 +33,18 @@ fun MainViewController(): UIViewController = ComposeUIViewController {
     var selectedColor by remember { mutableStateOf(BRUSH_COLOR_OPTIONS.first()) }
     var selectedSize by remember { mutableStateOf(BrushSizeOption.MEDIUM) }
 
+    val canvasView = remember { GestureCanvasView() }
+    val gesturePipeline = remember { GesturePipeline(canvasView, handLandmarkerModelPath()) }
+    DisposableEffect(gesturePipeline) {
+        onDispose { gesturePipeline.stop() }
+    }
+    LaunchedEffect(gesturePipeline) {
+        gesturePipeline.start()
+    }
+
     Box(modifier = Modifier.fillMaxSize().background(Color.DarkGray)) {
         UIKitView(
-            factory = { GestureCanvasView() },
+            factory = { canvasView },
             modifier = Modifier.fillMaxSize(),
         )
         Column(
@@ -51,3 +63,10 @@ fun MainViewController(): UIViewController = ComposeUIViewController {
         )
     }
 }
+
+/** hand_landmarker.task is bundled at the app root by xcodegen (iosApp/project.yml) -- see
+ * Stage 6d-1. A missing resource here means the build/packaging is broken, not a runtime
+ * condition to recover from. */
+private fun handLandmarkerModelPath(): String =
+    NSBundle.mainBundle.pathForResource(name = "hand_landmarker", ofType = "task")
+        ?: error("hand_landmarker.task missing from the app bundle")
