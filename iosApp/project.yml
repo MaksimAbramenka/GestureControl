@@ -13,6 +13,8 @@ targets:
     platform: iOS
     sources:
       - path: GestureControlApp
+      - path: ../app/src/main/assets/hand_landmarker.task
+        buildPhase: resources
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: com.gesturecontrol.app
