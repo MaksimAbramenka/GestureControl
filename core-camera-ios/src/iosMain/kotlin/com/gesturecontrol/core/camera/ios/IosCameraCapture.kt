@@ -46,6 +46,16 @@ class IosCameraCapture(
     var isConfigured: Boolean = false
         private set
 
+    /** No explicit permission request here: `AVCaptureDevice`'s `authorizationStatusForMediaType`/
+     * `requestAccessForMediaType:completionHandler:` class methods aren't bound in this
+     * Kotlin/Native distribution's `platform.AVFoundation` (both fully unresolved despite being
+     * ordinary, non-deprecated ObjC class methods per the real SDK header -- a cinterop gap, not a
+     * naming issue). Per Apple's own header doc on `requestAccessForMediaType:`: "the authorization
+     * dialog will automatically be shown if the status is AVAuthorizationStatusNotDetermined when
+     * creating an AVCaptureDeviceInput" -- exactly what [configureInputsAndOutputs] already does,
+     * so the system prompt still appears on first use with no extra code. If access is denied,
+     * `AVCaptureDeviceInput.deviceInputWithDevice` returns nil and [configureInputsAndOutputs]
+     * already handles that gracefully (see [IosCameraCaptureTest]). */
     fun configure(position: AVCaptureDevicePosition = AVCaptureDevicePositionFront): Boolean {
         session.beginConfiguration()
         configureInputsAndOutputs(position)

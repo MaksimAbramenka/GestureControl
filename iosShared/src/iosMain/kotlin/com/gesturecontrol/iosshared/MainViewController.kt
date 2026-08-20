@@ -24,7 +24,6 @@ import com.gesturecontrol.core.ui.camera.BrushControls
 import com.gesturecontrol.core.ui.camera.BrushSizeOption
 import com.gesturecontrol.core.ui.camera.FpsLabel
 import com.gesturecontrol.core.ui.camera.GestureStateLabel
-import com.gesturecontrol.domain.gesture.GestureClass
 import platform.Foundation.NSBundle
 import platform.UIKit.UIViewController
 
@@ -33,7 +32,12 @@ fun MainViewController(): UIViewController = ComposeUIViewController {
     var selectedColor by remember { mutableStateOf(BRUSH_COLOR_OPTIONS.first()) }
     var selectedSize by remember { mutableStateOf(BrushSizeOption.MEDIUM) }
 
-    val canvasView = remember { GestureCanvasView() }
+    val canvasView = remember {
+        GestureCanvasView().apply {
+            setBrushColor(selectedColor.r, selectedColor.g, selectedColor.b)
+            setBrushSize(selectedSize.size)
+        }
+    }
     val gesturePipeline = remember { GesturePipeline(canvasView, handLandmarkerModelPath()) }
     DisposableEffect(gesturePipeline) {
         onDispose { gesturePipeline.stop() }
@@ -51,14 +55,20 @@ fun MainViewController(): UIViewController = ComposeUIViewController {
             modifier = Modifier.align(Alignment.TopStart).padding(16.dp),
             verticalArrangement = Arrangement.spacedBy(8.dp),
         ) {
-            FpsLabel(fps = 24f)
-            GestureStateLabel(gestureClass = GestureClass.DRAW)
+            FpsLabel(fps = gesturePipeline.fps)
+            GestureStateLabel(gestureClass = gesturePipeline.gestureClass)
         }
         BrushControls(
             selectedColor = selectedColor,
             selectedSize = selectedSize,
-            onSelectColor = { selectedColor = it },
-            onSelectSize = { selectedSize = it },
+            onSelectColor = { option ->
+                selectedColor = option
+                canvasView.setBrushColor(option.r, option.g, option.b)
+            },
+            onSelectSize = { option ->
+                selectedSize = option
+                canvasView.setBrushSize(option.size)
+            },
             modifier = Modifier.align(Alignment.BottomCenter).padding(24.dp),
         )
     }

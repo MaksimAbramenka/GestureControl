@@ -6,6 +6,8 @@ import com.gesturecontrol.core.engine.ios.bridge.gc_renderer_draw
 import com.gesturecontrol.core.engine.ios.bridge.gc_renderer_init_onscreen
 import com.gesturecontrol.core.engine.ios.bridge.gc_renderer_present
 import com.gesturecontrol.core.engine.ios.bridge.gc_scene_create
+import com.gesturecontrol.core.engine.ios.bridge.gc_scene_set_brush_color
+import com.gesturecontrol.core.engine.ios.bridge.gc_scene_set_brush_size
 import com.gesturecontrol.core.engine.ios.bridge.gc_scene_submit_input
 import kotlinx.cinterop.BetaInteropApi
 import kotlinx.cinterop.CPointed
@@ -92,6 +94,10 @@ class GestureCanvasView : GCRenderView(frame = CGRectMake(0.0, 0.0, 0.0, 0.0)) {
     fun submitInput(x: Float, y: Float, state: Int, pressure: Float, timestampMs: Long) {
         gc_scene_submit_input(scene, x, y, state, pressure, timestampMs)
     }
+
+    fun setBrushColor(r: Float, g: Float, b: Float) = gc_scene_set_brush_color(scene, r, g, b)
+
+    fun setBrushSize(size: Float) = gc_scene_set_brush_size(scene, size)
 
     private fun renderFrame() {
         gc_renderer_draw(renderer, scene)

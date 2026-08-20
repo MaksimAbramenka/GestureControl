@@ -1,11 +1,15 @@
 package com.gesturecontrol.iosshared
 
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.setValue
 import com.gesturecontrol.core.camera.ios.IosCameraCapture
 import com.gesturecontrol.core.engine.ios.GestureCanvasView
 import com.gesturecontrol.core.engine.ios.toNativeState
 import com.gesturecontrol.core.ml.ios.IosGestureRecognizer
 import com.gesturecontrol.core.ml.ios.IosLiveHandLandmarker
 import com.gesturecontrol.core.ml.ios.mediapipe.MPPHandLandmarkerResult
+import com.gesturecontrol.domain.gesture.GestureClass
 import com.gesturecontrol.domain.gesture.GestureInputMapper
 import com.gesturecontrol.domain.gesture.GestureSmoother
 import com.gesturecontrol.domain.hand.ImageDimensions
@@ -39,9 +43,25 @@ class GesturePipeline(
      * frame rather than threaded through every async callback. */
     private var imageDimensions: ImageDimensions? = null
 
+    /** MediaPipe detection timestamps (from camera frame presentation times), used to derive
+     * [fps] -- the same "how fast is the actual detection pipeline running" metric Android's
+     * HandDetectionResult.fps reports, not a raw display refresh rate. */
+    private var lastResultTimestampMs: Long? = null
+
     private val landmarker = IosLiveHandLandmarker(modelAssetPath, ::handleResult)
     private val camera = IosCameraCapture(::handleFrame)
 
+    /** The current smoothed gesture, for live UI display -- null until the first hand is seen. */
+    var gestureClass: GestureClass? by mutableStateOf(null)
+        private set
+
+    /** EMA-smoothed detection throughput in frames/second, for live UI display. */
+    var fps: Float by mutableStateOf(0f)
+        private set
+
+    /** The system camera-permission prompt appears automatically the first time [camera]
+     * creates its `AVCaptureDeviceInput` (see [IosCameraCapture.configure]'s doc comment) -- no
+     * explicit request needed here. */
     fun start() {
         if (!camera.isConfigured) camera.configure()
         camera.start()
@@ -72,11 +92,14 @@ class GesturePipeline(
     // thread as long as the same thread that made the context current keeps using it consistently
     // per call, which submitInput's makeCurrent-per-call implementation already guarantees.
     private fun handleResult(result: MPPHandLandmarkerResult?, timestampMs: Long) {
+        updateFps(timestampMs)
+
         val recognition = result?.let { IosGestureRecognizer.recognizeFirstHand(it) }
-        val gestureClass = recognition?.classifiedGesture?.gestureClass?.let(gestureSmoother::smooth)
+        val smoothedGestureClass = recognition?.classifiedGesture?.gestureClass?.let(gestureSmoother::smooth)
+        gestureClass = smoothedGestureClass
         val fingertip = viewportFingertip(recognition?.landmarks?.indexFingertip)
 
-        gestureInputMapper.map(gestureClass, fingertip, timestampMs).forEach { command ->
+        gestureInputMapper.map(smoothedGestureClass, fingertip, timestampMs).forEach { command ->
             canvasView.submitInput(
                 x = command.x,
                 y = command.y,
@@ -85,6 +108,16 @@ class GesturePipeline(
                 timestampMs = command.timestampMs,
             )
         }
+    }
+
+    private fun updateFps(timestampMs: Long) {
+        val last = lastResultTimestampMs
+        lastResultTimestampMs = timestampMs
+        val deltaMs = if (last == null) return else timestampMs - last
+        if (deltaMs <= 0) return
+
+        val instantFps = 1000f / deltaMs
+        fps = if (fps == 0f) instantFps else fps * 0.9f + instantFps * 0.1f
     }
 
     private fun viewportFingertip(point: NormalizedPoint?): NormalizedPoint? {
