@@ -1,6 +1,7 @@
 package com.gesturecontrol.core.ml.ios
 
 import com.gesturecontrol.core.ml.ios.mediapipe.MPPBaseOptions
+import com.gesturecontrol.core.ml.ios.mediapipe.MPPDelegate
 import com.gesturecontrol.core.ml.ios.mediapipe.MPPHandLandmarker
 import com.gesturecontrol.core.ml.ios.mediapipe.MPPHandLandmarkerLiveStreamDelegateProtocol
 import com.gesturecontrol.core.ml.ios.mediapipe.MPPHandLandmarkerOptions
@@ -16,6 +17,7 @@ import kotlinx.cinterop.ptr
 import kotlinx.cinterop.value
 import platform.CoreMedia.CMSampleBufferRef
 import platform.Foundation.NSError
+import platform.Foundation.NSProcessInfo
 import platform.darwin.NSObject
 
 /**
@@ -36,12 +38,34 @@ class IosLiveHandLandmarker(
     private val landmarker: MPPHandLandmarker
 
     init {
-        val baseOptions = MPPBaseOptions().apply { this.modelAssetPath = modelAssetPath }
+        val baseOptions = MPPBaseOptions().apply {
+            this.modelAssetPath = modelAssetPath
+            // Without an explicit delegate, MediaPipe falls back to CPU-only XNNPACK, which is
+            // measurably slower for this model on real device hardware than GPU delegation. The
+            // Simulator's Metal delegate can't actually do this ("Apple Software Renderer", no
+            // real GPU passthrough) and fails calculator-graph init outright, so it needs CPU too
+            // -- confirmed via SIMULATOR_DEVICE_NAME, the env var Xcode/simctl always sets for a
+            // Simulator-hosted process and never sets for a real device.
+            this.delegate = if (isRunningOnSimulator()) MPPDelegate.MPPDelegateCPU else MPPDelegate.MPPDelegateGPU
+        }
         val options = MPPHandLandmarkerOptions().apply {
             this.baseOptions = baseOptions
             this.runningMode = MPPRunningMode.MPPRunningModeLiveStream
             this.numHands = 1L
             this.handLandmarkerLiveStreamDelegate = this@IosLiveHandLandmarker
+            // MediaPipe's hand landmarker only runs its expensive full palm-detection pass
+            // periodically, tracking cheaply frame-to-frame once a hand is acquired -- confirmed
+            // on a real device (iPhone XS/A12) as the actual cause of "recognition is very slow,
+            // but fast once it catches on": at the default (stricter) confidence thresholds,
+            // initial acquisition rarely clears the bar under normal handheld framing/lighting,
+            // so the app waits through several full-redetection cycles before ever tracking a
+            // hand. Lowering these (MediaPipe's own defaults are undocumented here, but visibly
+            // strict) trades a bit of false-positive risk for reliably faster acquisition --
+            // reasonable for a drawing app where GestureSmoother's majority-vote window already
+            // absorbs brief misclassifications.
+            this.minHandDetectionConfidence = 0.3f
+            this.minHandPresenceConfidence = 0.3f
+            this.minTrackingConfidence = 0.3f
         }
         // modelAssetPath is a committed build asset (see MainViewController.handLandmarkerModelPath),
         // not user input -- a failure here is a real bug (bad bundling, wrong MediaPipe API usage),
@@ -75,4 +99,7 @@ class IosLiveHandLandmarker(
     ) {
         onResult(didFinishDetectionWithResult, timestampInMilliseconds)
     }
+
+    private fun isRunningOnSimulator(): Boolean =
+        NSProcessInfo.processInfo.environment["SIMULATOR_DEVICE_NAME"] != null
 }

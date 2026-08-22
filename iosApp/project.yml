@@ -18,9 +18,6 @@ targets:
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: com.gesturecontrol.app
-        FRAMEWORK_SEARCH_PATHS:
-          - "$(PROJECT_DIR)/../iosShared/build/bin/iosSimulatorArm64/debugFramework"
-          - "$(PROJECT_DIR)/../iosShared/build/bin/iosArm64/debugFramework"
         # A Kotlin/Native *static* framework (GestureControlKit, isStatic = true) doesn't embed
         # its own framework dependencies' symbols -- only what it -force_load'd (MediaPipe's C++
         # graph runtime) is actually baked in. Its plain Objective-C classes (MPPHandLandmarker
@@ -64,14 +61,19 @@ targets:
         LD_RUNPATH_SEARCH_PATHS:
           - "$(inherited) @executable_path/Frameworks"
         ENABLE_USER_SCRIPT_SANDBOXING: NO
-        # MediaPipeTasksVision/Common ship as per-slice xcframework directories, so the search
-        # path (unlike the flags above) has to differ by SDK.
+        # GestureControlKit.framework and MediaPipeTasksVision/Common all ship as separate
+        # per-slice build outputs/xcframework directories -- unconditionally listing both the
+        # simulator and device paths let the linker silently pick the wrong slice (it picked
+        # simulator even when building for iphoneos, since it's listed first), so every one of
+        # these has to be SDK-conditional.
         FRAMEWORK_SEARCH_PATHS[sdk=iphonesimulator*]:
           - "$(inherited)"
+          - "$(PROJECT_DIR)/../iosShared/build/bin/iosSimulatorArm64/debugFramework"
           - "$(PROJECT_DIR)/../core-ml-ios/vendor/MediaPipeTasksVision/frameworks/MediaPipeTasksVision.xcframework/ios-arm64_x86_64-simulator"
           - "$(PROJECT_DIR)/../core-ml-ios/vendor/MediaPipeTasksCommon/frameworks/MediaPipeTasksCommon.xcframework/ios-arm64_x86_64-simulator"
         FRAMEWORK_SEARCH_PATHS[sdk=iphoneos*]:
           - "$(inherited)"
+          - "$(PROJECT_DIR)/../iosShared/build/bin/iosArm64/debugFramework"
           - "$(PROJECT_DIR)/../core-ml-ios/vendor/MediaPipeTasksVision/frameworks/MediaPipeTasksVision.xcframework/ios-arm64"
           - "$(PROJECT_DIR)/../core-ml-ios/vendor/MediaPipeTasksCommon/frameworks/MediaPipeTasksCommon.xcframework/ios-arm64"
         # Per MediaPipeTasksCommon's actual podspec (user_target_xcconfig): the graph runtime's

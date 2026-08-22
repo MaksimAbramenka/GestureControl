@@ -95,19 +95,22 @@ val fetchMediaPipeCommon = registerVendorFetchTask(
     "frameworks/MediaPipeTasksCommon.xcframework/ios-arm64/MediaPipeTasksCommon.framework/Info.plist",
 )
 
-// Every MPP*Options/MPP*Result wrapper class (plus NSString) has a paired "+Helpers.o" archive
-// member implementing its proto-conversion category (e.g. +[NSString(Helpers) uuidString],
-// -[MPPHandLandmarkerOptions(Helpers) copyToProto:]) that real code calls into at runtime.
-// Objective-C categories create no ordinary linker-visible symbol reference, so a normal
-// (non -ObjC) static link silently drops these .o's -- crashing at runtime the first time a task
-// actually exercises one ("unrecognized selector", or MediaPipe's own "One of copyTo*Proto:
-// methods must be implemented..." assertion). The usual fix is -ObjC, but that force-loads *every*
-// ObjC-containing member of MediaPipeTasksCommon.framework, including unrelated text-generation
-// modules (text_summarizer, text_proofreader) that need a litert_lm library nobody vendored here.
-// Instead, extract every self-contained "+Helpers.o" member (checked: none reference litert_lm)
-// into one small combined archive and force_load *that* directly at the app level
-// (iosApp/project.yml), for the same "K/N doesn't inherit linker flags transitively" reason
-// documented elsewhere in this repo.
+// Every MPP*Options/MPP*Result wrapper class (plus NSString, MPPImage) has a paired
+// "ClassName+CategoryName.o" archive member (the standard Objective-C category-per-file naming
+// convention -- e.g. "MPPHandLandmarkerOptions+Helpers.o", "MPPImage+Utils.o", almost all named
+// "+Helpers.o" but not all, confirmed the hard way when MPPImage's "+Utils.o" category was the one
+// actually missing on a real device: -[MPPImage(Utils) imageFrameWithError:] never gets called
+// with only a hardcoded test stroke or a Simulator run, since the Simulator has no camera) that
+// real code calls into at runtime. Objective-C categories create no ordinary linker-visible symbol
+// reference, so a normal (non -ObjC) static link silently drops these .o's -- crashing at runtime
+// the first time a task actually exercises one ("unrecognized selector", or MediaPipe's own "One
+// of copyTo*Proto: methods must be implemented..." assertion). The usual fix is -ObjC, but that
+// force-loads *every* ObjC-containing member of MediaPipeTasksCommon.framework, including
+// unrelated text-generation modules (text_summarizer, text_proofreader) that need a litert_lm
+// library nobody vendored here. Instead, extract every self-contained "ClassName+Category.o"
+// member (checked: none reference litert_lm) into one small combined archive and force_load *that*
+// directly at the app level (iosApp/project.yml), for the same "K/N doesn't inherit linker flags
+// transitively" reason documented elsewhere in this repo.
 fun registerExtractHelpersCategoriesTask(taskName: String, frameworkSliceDir: String) =
     tasks.register(taskName) {
         dependsOn(fetchMediaPipeCommon)
@@ -136,8 +139,8 @@ fun registerExtractHelpersCategoriesTask(taskName: String, frameworkSliceDir: St
 
             val (listExit, listOutput) = runCommand("ar", "t", arInput.path)
             check(listExit == 0) { "Listing members failed for $frameworkSliceDir:\n$listOutput" }
-            val members = listOutput.lines().map { it.trim() }.filter { it.endsWith("+Helpers.o") }
-            check(members.isNotEmpty()) { "No +Helpers.o members found in $arInput" }
+            val members = listOutput.lines().map { it.trim() }.filter { it.contains("+") && it.endsWith(".o") }
+            check(members.isNotEmpty()) { "No ClassName+Category.o members found in $arInput" }
 
             for (member in members) {
                 val process = ProcessBuilder("ar", "-x", arInput.path, member)

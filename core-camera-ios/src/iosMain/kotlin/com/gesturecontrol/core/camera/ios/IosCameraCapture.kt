@@ -2,6 +2,7 @@ package com.gesturecontrol.core.camera.ios
 
 import kotlinx.cinterop.ExperimentalForeignApi
 import kotlinx.cinterop.alloc
+import kotlinx.cinterop.interpretObjCPointer
 import kotlinx.cinterop.memScoped
 import kotlinx.cinterop.ptr
 import platform.AVFoundation.AVCaptureConnection
@@ -15,11 +16,14 @@ import platform.AVFoundation.AVCaptureOutput
 import platform.AVFoundation.AVCaptureSession
 import platform.AVFoundation.AVCaptureVideoDataOutput
 import platform.AVFoundation.AVCaptureVideoDataOutputSampleBufferDelegateProtocol
+import platform.AVFoundation.AVCaptureVideoOrientationPortrait
 import platform.AVFoundation.AVMediaTypeVideo
 import platform.CoreMedia.CMSampleBufferRef
 import platform.CoreVideo.kCVPixelBufferPixelFormatTypeKey
 import platform.CoreVideo.kCVPixelFormatType_32BGRA
 import platform.Foundation.NSError
+import platform.Foundation.NSNumber
+import platform.Foundation.NSString
 import platform.darwin.NSObject
 import platform.darwin.dispatch_async
 import platform.darwin.dispatch_queue_create
@@ -80,9 +84,29 @@ class IosCameraCapture(
 
         val output = AVCaptureVideoDataOutput()
         output.setSampleBufferDelegate(this, outputQueue)
-        output.videoSettings = mapOf(kCVPixelBufferPixelFormatTypeKey to kCVPixelFormatType_32BGRA)
+        // Both sides of this entry need bridging, confirmed via real Kotlin type-checking, not
+        // guessing: kCVPixelBufferPixelFormatTypeKey is a raw CPointer<__CFString> (a
+        // CoreFoundation constant, never auto-bridged to NSString despite CFString/NSString being
+        // toll-free bridged at the ObjC runtime level) -- putting a bare CPointer key or a raw
+        // OSType (UInt32) value into the map leaves them unboxed, so AVFoundation silently drops
+        // the whole entry at runtime ("unsupported (ignored) keys", confirmed on a real device)
+        // and the output ends up in some other default pixel format MediaPipe's LIVE_STREAM
+        // detection can't correctly interpret.
+        val pixelFormatKey = interpretObjCPointer<NSString>(kCVPixelBufferPixelFormatTypeKey!!.rawValue)
+        output.videoSettings = mapOf(pixelFormatKey to NSNumber(unsignedInt = kCVPixelFormatType_32BGRA))
         if (!session.canAddOutput(output)) return
         session.addOutput(output)
+
+        // MPPImage(sampleBuffer:) always reports orientation .up (no rotation applied), so the
+        // raw sensor buffer itself must already be upright, or MediaPipe processes a sideways
+        // frame -- confirmed on a real device as exactly the cause of wildly unreliable hand
+        // detection (a real image, but the model rarely recognizes a 90-degree-rotated hand). The
+        // connection only exists after addOutput; only AVCaptureVideoDataOutput/DepthDataOutput
+        // physically rotate buffers to match, which is exactly what's needed here. (Confirmed via
+        // a real-device isolation test that this is NOT the cause of the separate periodic ~10s
+        // camera stall investigated separately -- that persisted identically with this disabled.)
+        (output.connections.firstOrNull() as? AVCaptureConnection)?.videoOrientation =
+            AVCaptureVideoOrientationPortrait
 
         isConfigured = true
     }

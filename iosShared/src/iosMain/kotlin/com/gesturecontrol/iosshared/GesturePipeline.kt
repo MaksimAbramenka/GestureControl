@@ -23,6 +23,7 @@ import platform.CoreMedia.CMSampleBufferRef
 import platform.CoreMedia.CMTimeGetSeconds
 import platform.CoreVideo.CVPixelBufferGetHeight
 import platform.CoreVideo.CVPixelBufferGetWidth
+import kotlin.concurrent.Volatile
 
 /**
  * Owns and wires together the live gesture pipeline: camera frames -> MediaPipe hand tracking
@@ -48,6 +49,17 @@ class GesturePipeline(
      * HandDetectionResult.fps reports, not a raw display refresh rate. */
     private var lastResultTimestampMs: Long? = null
 
+    /** Guards against flooding MediaPipe with every camera frame regardless of whether it's still
+     * busy with a previous one -- confirmed on a real device (iPhone XS/A12) as the actual cause
+     * of "gesture updates very slowly": camera frames arrive around 28-30fps, but the full
+     * hand-landmark graph can't keep up on this chip, and submitting every frame anyway let a
+     * backlog build up into periodic multi-second stalls (a burst of queued results every ~10s,
+     * not smooth live updates). Android's CameraX equivalent handles this via
+     * STRATEGY_KEEP_ONLY_LATEST -- this is the same idea: only ever process the newest available
+     * frame, silently dropping the ones in between while busy. */
+    @Volatile
+    private var isProcessingFrame = false
+
     private val landmarker = IosLiveHandLandmarker(modelAssetPath, ::handleResult)
     private val camera = IosCameraCapture(::handleFrame)
 
@@ -71,11 +83,16 @@ class GesturePipeline(
 
     private fun handleFrame(sampleBuffer: CMSampleBufferRef?) {
         if (sampleBuffer == null) return
+        if (isProcessingFrame) return
         if (imageDimensions == null) {
             imageDimensions = readImageDimensions(sampleBuffer)
         }
         val timestampMs = (CMTimeGetSeconds(CMSampleBufferGetPresentationTimeStamp(sampleBuffer)) * 1000).toLong()
-        landmarker.detectAsync(sampleBuffer, timestampMs)
+        isProcessingFrame = true
+        // detectAsyncImage failing synchronously (e.g. bad timestamp ordering) means no result --
+        // and therefore no handleResult call -- will ever arrive to clear the flag, so clear it
+        // here instead or every subsequent frame would be dropped forever.
+        if (!landmarker.detectAsync(sampleBuffer, timestampMs)) isProcessingFrame = false
     }
 
     private fun readImageDimensions(sampleBuffer: CMSampleBufferRef): ImageDimensions? {
@@ -92,6 +109,7 @@ class GesturePipeline(
     // thread as long as the same thread that made the context current keeps using it consistently
     // per call, which submitInput's makeCurrent-per-call implementation already guarantees.
     private fun handleResult(result: MPPHandLandmarkerResult?, timestampMs: Long) {
+        isProcessingFrame = false
         updateFps(timestampMs)
 
         val recognition = result?.let { IosGestureRecognizer.recognizeFirstHand(it) }
