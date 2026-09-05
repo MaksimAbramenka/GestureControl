@@ -24,6 +24,7 @@ ktlint = "1.5.0"
 timber = "5.0.1"
 composeMultiplatform = "1.11.1"
 lwjgl = "3.4.1"
+lwjglAwt = "0.2.4"
 
 [libraries]
 core-ktx = { group = "androidx.core", name = "core-ktx", version.ref = "coreKtx" }
@@ -66,6 +67,7 @@ lwjgl-bom = { group = "org.lwjgl", name = "lwjgl-bom", version.ref = "lwjgl" }
 lwjgl-core = { group = "org.lwjgl", name = "lwjgl" }
 lwjgl-glfw = { group = "org.lwjgl", name = "lwjgl-glfw" }
 lwjgl-opengl = { group = "org.lwjgl", name = "lwjgl-opengl" }
+lwjgl3-awt = { group = "org.lwjglx", name = "lwjgl3-awt", version.ref = "lwjglAwt" }
 
 [plugins]
 android-application = { id = "com.android.application", version.ref = "agp" }
