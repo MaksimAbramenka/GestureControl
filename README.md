@@ -1,10 +1,10 @@
 # GestureControl
 
-A gesture-driven drawing canvas, running natively on both Android and iOS from one Kotlin Multiplatform codebase: raise a hand in front of the camera, pinch to draw, hold up two fingers to erase, hold a point pose and speak a command — no touch input at all. An on-device ML pipeline (MediaPipe → a custom-trained LiteRT classifier) drives a hand-written C++/OpenGL native rendering core, shared unchanged between platforms behind a JNI bridge on Android and a Kotlin/Native `cinterop` shim on iOS. Android additionally layers a second on-device LLM pipeline (LiteRT-LM) on top for voice commands (see [Cross-platform (iOS) port](#cross-platform-ios-port) for what did and didn't carry over).
+A gesture-driven drawing canvas, running natively on Android, iOS, *and* desktop (macOS) from one Kotlin Multiplatform codebase: raise a hand in front of the camera, pinch to draw, hold up two fingers to erase, hold a point pose and speak a command — no touch input at all. An on-device ML pipeline (MediaPipe → a custom-trained LiteRT classifier) drives a hand-written C++/OpenGL native rendering core, shared unchanged across all three platforms behind a JNI bridge on Android and desktop, and a Kotlin/Native `cinterop` shim on iOS. Android additionally layers a second on-device LLM pipeline (LiteRT-LM) on top for voice commands (see [Cross-platform (iOS) port](#cross-platform-ios-port) and [Cross-platform (Desktop) port](#cross-platform-desktop-port) for what did and didn't carry over on each).
 
 ![Demo](media/demo.gif)
 
-*(Full-quality video: [media/demo.mp4](media/demo.mp4). iOS side-by-side demo: see [Cross-platform (iOS) port](#cross-platform-ios-port).)*
+*(Full-quality video: [media/demo.mp4](media/demo.mp4). iOS and Desktop demos: see [Cross-platform (iOS) port](#cross-platform-ios-port) and [Cross-platform (Desktop) port](#cross-platform-desktop-port).)*
 
 ## What it does
 
@@ -50,17 +50,20 @@ The dividing line that makes this tractable: **the native core only ever sees `I
 
 ```mermaid
 graph BT
-    domain["domain<br/>commonMain — shared by both platforms"]
-    coreUi["core-ui<br/>commonMain composables + androidMain glue"]
+    domain["domain<br/>commonMain — shared by all three platforms"]
+    coreUi["core-ui<br/>commonMain composables + androidMain glue<br/>(no iOS or desktop glue needed at all)"]
     coreCamera["core-camera<br/>androidMain: CameraX"]
     coreCameraIos["core-camera-ios<br/>iosMain: AVFoundation"]
     coreMl["core-ml<br/>androidMain: MediaPipe Android + LiteRT"]
     gestureClassifier["core-ml:gesture-classifier<br/>LiteRT wrapper (Android)"]
     coreMlIos["core-ml-ios<br/>iosMain: MediaPipeTasksVision"]
+    coreMlDesktop["core-ml-desktop<br/>Python sidecar client + classifier wiring"]
     coreEngine["core-engine<br/>C++ native core (scene/render/input)<br/>+ JNI bridge (Android)"]
     coreEngineIos["core-engine-ios<br/>Kotlin/Native cinterop shim → same C++ core"]
+    coreEngineDesktop["core-engine-desktop<br/>JNI bridge (desktop) → same C++ core"]
     coreVoice["core-voice<br/>androidMain: STT + LiteRT-LM"]
     iosShared["iosShared<br/>iosMain: pipeline wiring + Compose UIViewController"]
+    appDesktop["app-desktop<br/>Compose Desktop Window + pipeline wiring"]
     app["app<br/>Android entry point"]
 
     coreCamera --> domain
@@ -69,8 +72,10 @@ graph BT
     coreMl --> gestureClassifier
     gestureClassifier --> domain
     coreMlIos --> domain
+    coreMlDesktop --> domain
     coreEngine --> domain
     coreEngineIos --> coreEngine
+    coreEngineDesktop --> coreEngine
     coreUi --> domain
     coreUi --> coreEngine
     coreVoice --> domain
@@ -86,9 +91,15 @@ graph BT
     iosShared --> coreCameraIos
     iosShared --> coreMlIos
     iosShared --> coreEngineIos
+    appDesktop --> domain
+    appDesktop --> coreUi
+    appDesktop --> coreMlDesktop
+    appDesktop --> coreEngineDesktop
 ```
 
-`domain` (the feature-extraction/classification/smoothing/input-mapping logic) and `core-ui`'s composables are genuinely shared, unmodified `commonMain` code — not a "ported" copy, the same source compiles and runs on both targets, same test suite included (see [Testing](#testing)). `core-engine`'s Kotlin side, on either platform, is a thin wrapper — all real logic (scene graph, smoothing, rendering) lives in the C++ core, which is reused byte-for-byte between platforms; only the bridge into it differs (JNI vs. a Kotlin/Native `cinterop` shim). `core-voice` (STT + LiteRT-LM) has no iOS target — see below for why.
+`domain` (the feature-extraction/classification/smoothing/input-mapping logic) and `core-ui`'s composables are genuinely shared, unmodified `commonMain` code — not a "ported" copy, the same source compiles and runs on all three targets, same test suite included (see [Testing](#testing)). `core-ui` needed zero platform-specific glue for either iOS or desktop — both entry points wire its composables directly. `core-engine`'s Kotlin side, on every platform, is a thin wrapper — all real logic (scene graph, smoothing, rendering) lives in the C++ core, which is reused byte-for-byte across Android, iOS, *and* desktop; only the bridge into it differs (JNI on Android and desktop, a Kotlin/Native `cinterop` shim on iOS). `core-voice` (STT + LiteRT-LM) has no iOS or desktop target — see each platform's own section below for why.
+
+**Shared code, with real numbers, across all three platforms:** of **4,394 lines** of production Kotlin, **1,503 (~34%)** live in `commonMain` (`domain`: 828, `core-ui`'s composables: 675) and compile unmodified into the Android, iOS, and desktop binaries alike. On top of that, the entire native rendering core — scene graph, point smoothing, ribbon tessellation, **936 lines of C++** — is reused byte-for-byte across all three; it isn't counted in the Kotlin figure since it's linked in through three different thin bridges (229-line JNI glue on Android, a 447-line Obj-C++ shim on iOS, a 131-line JNI bridge on desktop) rather than compiled by Kotlin itself. This is exactly the kind of platform-agnostic core Clean Architecture is supposed to buy — proven a third time, each time with less new code than the last (iOS added 658 platform-specific lines to reach full feature parity; desktop needed only 528, despite adding a whole new hand-tracking approach along the way).
 
 ## Cross-platform (iOS) port
 
@@ -103,14 +114,33 @@ The whole gesture-drawing loop — camera → hand tracking → gesture classifi
 | Native interop | JNI (`core-engine/src/main/cpp/jni`) | `extern "C"` Objective-C++ shim (`core-engine/src/main/cpp/ios-shim`) + a Kotlin/Native `cinterop` `.def` binding (`core-engine-ios`) — same discipline as the JNI bridge, different binding syntax |
 | Voice commands | LiteRT-LM + FunctionGemma, on-device | **Out of scope** — LiteRT-LM's iOS Swift package is still "Early Preview," and its tool-calling support (what Phase 2's voice layer depends on) landed only weeks before this phase started; not a good bet on top of Phase 2's own documented accuracy ceiling on the *mature* Android build |
 
-**Shared code, with real numbers:** of **3,866 lines** of production Kotlin across the whole project, **1,503 (~39%)** live in `commonMain` (`domain`: 828, `core-ui`'s composables: 675) and compile unmodified into both the Android and iOS binaries. On top of that, the entire native rendering core — scene graph, point smoothing, ribbon tessellation, **936 lines of C++** — is reused byte-for-byte between platforms; it isn't counted in the Kotlin figure above since it's linked in through two different thin bridges (229-line JNI glue vs. a 447-line Obj-C++ shim) rather than compiled by Kotlin/Native itself, but it's exactly the kind of platform-agnostic core Clean Architecture is supposed to buy — proven twice now, not just claimed once.
-
 **What didn't port cleanly, stated plainly:**
 - **OpenGL ES is deprecated on iOS** (since iOS 12) but was kept deliberately rather than rewritten in Metal — confirmed still present and compilable on the current SDK, and reusing it kept this phase scoped to what was actually new (KMP interop, camera, MediaPipe) instead of also rewriting the rendering backend. Silenced via `GLES_SILENCE_DEPRECATION`, not ignored.
 - **iOS has a smaller feature surface than Android today.** `MainViewController.kt` only wires up `BrushControls`, `FpsLabel`, and `GestureStateLabel` from `core-ui`'s shared composables — the on-canvas gesture-cursor overlay, hand-landmark debug overlay, data-collection mode, and (per above) voice commands all exist in `core-ui`/`app` for Android but aren't wired into the iOS entry point yet. They're shared-code-ready, just not yet plumbed through on the iOS side.
 - **A real-device performance investigation, not a code bug.** Real-device testing (Stage 6e) surfaced two genuine bugs along the way — MediaPipe silently falling back to CPU-only inference (no GPU delegate had been set) and the camera's `videoSettings` dictionary silently dropping its pixel-format entry (unboxed CoreFoundation constants, confirmed via real Kotlin type-checking) — both fixed. After those fixes, a periodic multi-second stall remained on one specific physical test device; methodically ruled out lighting, MediaPipe speed, the debug console tunnel, `AVCaptureSession`-level interruptions, thermal state, and Debug-vs-Release builds in turn, before landing on that device's own degraded battery health (75% max capacity) triggering iOS's own peak-power throttling — a subsystem separate from thermal management and invisible to `AVCaptureSession`'s own interruption reporting. Independently confirmed (not just asserted) with a test that drives the identical `LIVE_STREAM` MediaPipe pipeline on the Simulator's unthrottled hardware: 300 sustained submissions, zero multi-second gaps (see [Testing](#testing)).
 
 **Demo:** *(iOS side-by-side recording pending — the Simulator has no camera passthrough for MediaPipe to see a real hand, so this needs a screen recording from the physical device rather than something capturable from this machine alone.)*
+
+## Cross-platform (Desktop) port
+
+The same gesture-drawing loop again, this time on JVM desktop (macOS) via Compose Desktop — a real window, a real webcam, real native OpenGL rendering, no Android or iOS device involved.
+
+| Layer | Android | Desktop |
+|---|---|---|
+| Camera + hand tracking | CameraX + MediaPipe Tasks Vision (Android), `LIVE_STREAM` | **A local Python subprocess** (`hand-tracking-sidecar/hand_tracking_sidecar.py`) owns both the webcam (`cv2.VideoCapture`) and MediaPipe's real `HandLandmarker`, pinned to `mediapipe==0.10.30` (the newer 1.0.x line hits a real macOS Metal-calculator-service crash, reproduced directly and pinned around), emitting one JSON line of landmarks per frame over stdout to the JVM side (`core-ml-desktop`'s `HandTrackingSidecarClient`) |
+| Why a subprocess, not a JVM library | — | MediaPipe's official Java Tasks Vision artifact ships a native `.so` built for Android specifically (confirmed via open, unanswered `google-ai-edge/mediapipe` GitHub issues asking how to build a desktop/JVM version); Google's own docs list exactly four officially supported HandLandmarker platforms — iOS, Android, Web, and Python — desktop C++ isn't one of them. Python was verified directly (not assumed): the same `hand_landmarker.task` file runs cleanly in `LIVE_STREAM` mode, 100/100 async submissions, avg 9.5ms |
+| Classifier runtime | LiteRT `CompiledModel` reading the bundled `.tflite` file | **Zero new work** — reuses `domain`'s `GestureMlp` completely unmodified, the same hand-rolled forward pass already built for iOS (see above). The clearest evidence yet that the shared-`commonMain` investment compounds across ports rather than resetting for each new platform |
+| Rendering | EGL, driven by `Choreographer` | Real desktop OpenGL 3.3 core profile — **not** GLES-via-ANGLE, the original plan: `google/angle` publishes no prebuilt macOS binaries at all, and its only easy packaging (a Homebrew tap) required trusting an unrelated, unverified third-party tap just to satisfy a listed build dependency, declined outright. `GLCompat.h` (shared with Android/iOS) grew a real desktop-macOS branch instead, providing the different GLSL version pragma real desktop OpenGL needs — `StrokeRenderer.cpp`'s C++ *math* is still reused completely unchanged, only its shader *text* has a second variant |
+| Rendering surface | `GLSurfaceView` | Two, for two different purposes: a hidden GLFW window (`core-engine-desktop`'s own test) for headless CI-style verification, and `org.lwjglx:lwjgl3-awt`'s `AWTGLCanvas` embedded via Compose's `SwingPanel` (`app-desktop`) for the real visible app — a separate community project from LWJGL core itself, not `org.lwjgl:lwjgl-opengl` |
+| Native interop | JNI (`core-engine/src/main/cpp/jni`) | JNI again (`core-engine-desktop`) — the *same* mechanism, unlike iOS which needed a whole new binding technology (`cinterop`) because Kotlin/Native has no first-class C++ interop |
+| Voice commands | LiteRT-LM + FunctionGemma, on-device | **Out of scope**, same reasoning as iOS — no JVM/desktop LiteRT-LM package |
+
+**What didn't port cleanly, stated plainly:**
+- **Hand tracking is a genuine architectural deviation, not a clean port.** Every other platform-specific piece in this project is native Kotlin/C++; desktop hand tracking is a bundled Python process instead, because that's the only approach that's both real and low-risk here (see the table row above). The bundling story is settled pragmatically for now too — a pinned venv (`hand-tracking-sidecar/requirements.txt`, gitignored the same way `ml/venv` already is), not a frozen/PyInstaller-style standalone build; that's a real, deferred distribution concern, not a solved one.
+- **Two real bugs surfaced by live, physical-webcam testing, not assumed correct from a clean build.** Drawing initially tracked the mirror image of the real hand — both in position and in MediaPipe's own handedness label — because macOS's built-in webcam (AVFoundation) delivers an already-mirrored frame for front-facing cameras, unlike Android/iOS's own camera analysis streams; fixed with a single `cv2.flip` in the sidecar before MediaPipe ever sees the frame. Separately, drawing was confined to one quarter of the window on this Retina display: `AWTGLCanvas`'s logical-point `width`/`height` were used where the real physical-pixel `framebufferWidth`/`framebufferHeight` (2x on Retina) were needed, for both the GL viewport and the gesture pipeline's own coordinate mapping.
+- **Desktop has a smaller feature surface than Android today**, the same honest gap iOS already has — no data-collection mode, hand-landmark debug overlay, gesture-cursor overlay, or voice commands wired into `app-desktop` yet, even though the underlying shared code is ready for all but the last.
+
+**Demo:** *(pending a screen recording of the desktop app — same "needs a physical capture, not something scriptable from this machine alone" situation as iOS.)*
 
 ## The ML pipeline, with real numbers
 
@@ -153,12 +183,12 @@ It was: `POINT`, held for a sustained ~500ms (`PointHoldGate`), is exactly the t
 
 ## Testing
 
-TDD throughout, not retrofitted: **148 tests**, all passing on both platforms.
+TDD throughout, not retrofitted: **153 tests**, all passing across Android, iOS, and desktop.
 
-- **98 Kotlin unit tests.** `domain`'s 73 tests are genuinely cross-platform — the same JUnit-5-style source runs via the JVM test runner on Android and via Kotlin/Native's own test runner on the iOS Simulator, no forking or platform-specific rewriting — covering feature normalization, viewport/crop mapping, gesture smoothing, gesture-to-input-event mapping, and the edge-dwell/point-hold timer state machines. `core-ml` (10) and `core-voice` (5) are Android-only, covering the LiteRT landmark mapping/CSV formatting and the voice-activation state machine plus STT→LLM orchestration (MockK-mocked collaborators). `core-camera-ios` (1), `core-ml-ios` (5), and `core-engine-ios` (4) are iOS-only — proving the AVFoundation session configures, the MediaPipe `LIVE_STREAM` landmarker actually constructs against both the CPU and GPU delegate paths, and the EAGL renderer produces correct pixels through the `cinterop` bridge (`RendererBridgeTest`).
-- **50 GoogleTest tests** for the C++ core (`scene/`, `render/`, `input/`), built and run completely independently of any Gradle build via a host-side CMake project (`core-engine/src/test/cpp`) — the same scene graph (including snapshot-based undo/redo, the near-continuous-stroke merge, and a live mid-stroke color/size update), ribbon tessellation (including Catmull-Rom subdivision), and smoothing-filter logic that ships on **both** Android and iOS, verified once on the host machine in milliseconds rather than twice on-device.
+- **103 Kotlin unit tests.** `domain`'s 73 tests are genuinely cross-platform — the same JUnit-5-style source runs via the JVM test runner on Android *and* desktop and via Kotlin/Native's own test runner on the iOS Simulator, no forking or platform-specific rewriting — covering feature normalization, viewport/crop mapping, gesture smoothing, gesture-to-input-event mapping, and the edge-dwell/point-hold timer state machines. `core-ml` (10) and `core-voice` (5) are Android-only, covering the LiteRT landmark mapping/CSV formatting and the voice-activation state machine plus STT→LLM orchestration (MockK-mocked collaborators). `core-camera-ios` (1), `core-ml-ios` (5), and `core-engine-ios` (4) are iOS-only — proving the AVFoundation session configures, the MediaPipe `LIVE_STREAM` landmarker actually constructs against both the CPU and GPU delegate paths, and the EAGL renderer produces correct pixels through the `cinterop` bridge (`RendererBridgeTest`). `core-engine-desktop` (1) and `core-ml-desktop` (4) are desktop-only — a real desktop OpenGL context drawing and capturing a correct pixel (`DesktopRendererBridgeTest`), and the sidecar's JSON-to-domain-type mapping handling a missing hand, a malformed frame, and an unrecognized handedness string without crashing (`SidecarFrameTest`).
+- **50 GoogleTest tests** for the C++ core (`scene/`, `render/`, `input/`), built and run completely independently of any Gradle build via a host-side CMake project (`core-engine/src/test/cpp`) — the same scene graph (including snapshot-based undo/redo, the near-continuous-stroke merge, and a live mid-stroke color/size update), ribbon tessellation (including Catmull-Rom subdivision), and smoothing-filter logic that ships on **all three** platforms, verified once on the host machine in milliseconds rather than three times on-device.
 - **This discipline caught a real regression, not a hypothetical one:** making MediaPipe's GPU delegate unconditional (a genuine real-device performance fix, see [Cross-platform (iOS) port](#cross-platform-ios-port)) broke `IosLiveHandLandmarkerTest` on the Simulator outright — Metal's software renderer there can't actually initialize an inference delegate, a `RET_CHECK` failure the test caught immediately, before it ever reached a device. Fixed by detecting the Simulator at runtime (`SIMULATOR_DEVICE_NAME`) and falling back to CPU there.
-- Thin framework-glue code (CameraX/AVFoundation wiring, the MediaPipe analyzer on both platforms, the JNI/cinterop marshaling layers, `SpeechRecognizerSource`, `VoiceCommandClassifier`) is intentionally not unit tested — it's verified by running on a physical device instead, which is where the real risk in that kind of code actually lives. Only the pure sequencing logic sitting behind those framework-bound classes (`VoiceActivationOrchestrator`) gets mocked-collaborator unit tests. `LiveHandLandmarkerSustainedThroughputTest` (`core-ml-ios`) is the one exception worth calling out by name: it drives MediaPipe's real `LIVE_STREAM` engine end-to-end on Simulator hardware specifically to give an independently reproducible answer to a real-device question ("is a stall the pipeline's fault, or the device's?") rather than one more mocked unit test.
+- Thin framework-glue code (CameraX/AVFoundation wiring, the MediaPipe analyzer, the JNI/cinterop marshaling layers, `SpeechRecognizerSource`, `VoiceCommandClassifier`) is intentionally not unit tested on any platform — it's verified by running on a physical device instead, which is where the real risk in that kind of code actually lives. Only the pure sequencing logic sitting behind those framework-bound classes (`VoiceActivationOrchestrator`) gets mocked-collaborator unit tests. `LiveHandLandmarkerSustainedThroughputTest` (`core-ml-ios`) is the one exception worth calling out by name: it drives MediaPipe's real `LIVE_STREAM` engine end-to-end on Simulator hardware specifically to give an independently reproducible answer to a real-device question ("is a stall the pipeline's fault, or the device's?") rather than one more mocked unit test.
 
 ## Performance
 
@@ -188,10 +218,22 @@ open GestureControlApp.xcodeproj
 
 Select your own team under Signing & Capabilities (the repo doesn't — and shouldn't — commit anyone's signing identity), then build and run on a **physical device**. Like Android, this needs the real camera: the iOS Simulator has no camera passthrough, so MediaPipe never receives real frames there — Simulator runs are useful for the test suite (below) and for `HandLandmarker`/renderer-construction checks, not for actually seeing the gesture pipeline draw anything.
 
-To run the full suite (Android JVM + iOS Simulator + the shared C++ core, all in one pass — the pre-commit/pre-push hooks only run `spotlessCheck` for speed, so this is a separate, deliberate step, not something enforced automatically on every commit):
+### Desktop (macOS)
 
 ```bash
-./gradlew test allTests                                        # 98 Kotlin unit tests, JVM + iOS Simulator
+python3 -m venv hand-tracking-sidecar/venv
+source hand-tracking-sidecar/venv/bin/activate
+pip install -r hand-tracking-sidecar/requirements.txt
+deactivate
+./gradlew :app-desktop:run
+```
+
+The venv is a one-time setup step (gitignored, like `ml/venv`), needed because desktop hand tracking runs through a bundled Python subprocess rather than a JVM library — see [Cross-platform (Desktop) port](#cross-platform-desktop-port) for why. The first run prompts for the same one-time camera permission Android/iOS need; on macOS this is tied to whatever process actually launches the JVM (Terminal, an IDE, ...), so grant it to that app specifically if the prompt doesn't appear on its own.
+
+To run the full suite (Android/desktop JVM + iOS Simulator + the shared C++ core, all in one pass — the pre-commit/pre-push hooks only run `spotlessCheck` for speed, so this is a separate, deliberate step, not something enforced automatically on every commit):
+
+```bash
+./gradlew test allTests                                        # 103 Kotlin unit tests, JVM (Android + desktop) + iOS Simulator
 cmake -S core-engine/src/test/cpp -B core-engine/build/host-tests
 cmake --build core-engine/build/host-tests
 ./core-engine/build/host-tests/gesture_canvas_core_tests        # 50 GoogleTest tests
@@ -199,7 +241,7 @@ cmake --build core-engine/build/host-tests
 
 ## Voice commands model setup
 
-Android only — see [Cross-platform (iOS) port](#cross-platform-ios-port) for why voice isn't part of the iOS build. The voice-command model isn't bundled with the repo (see "Voice commands, with real numbers" above for why) — the app builds and runs fully without it; voice commands simply report unavailable until it's provided (`VoiceCommandClassifier.isModelAvailable()`).
+Android only — see [Cross-platform (iOS) port](#cross-platform-ios-port) and [Cross-platform (Desktop) port](#cross-platform-desktop-port) for why voice isn't part of either other build. The voice-command model isn't bundled with the repo (see "Voice commands, with real numbers" above for why) — the app builds and runs fully without it; voice commands simply report unavailable until it's provided (`VoiceCommandClassifier.isModelAvailable()`).
 
 To try voice commands:
 
@@ -215,14 +257,17 @@ To try voice commands:
 | UI | Compose Multiplatform, Compose BOM 2026.06.00 |
 | Camera (Android) | CameraX 1.5.1 |
 | Camera (iOS) | `AVCaptureSession`/`AVCaptureVideoDataOutput`, hand-written (`core-camera-ios`) |
+| Camera + hand tracking (desktop) | Python 3.13, `mediapipe` 0.10.30 (pinned — see [Cross-platform (Desktop) port](#cross-platform-desktop-port)), `opencv-python` for `cv2.VideoCapture`, run as a subprocess (`hand-tracking-sidecar/`) |
 | Hand tracking (Android) | MediaPipe Tasks Vision 0.10.29 |
 | Hand tracking (iOS) | `MediaPipeTasksVision` 1.0.0, vendored as an xcframework (not CocoaPods — fetched and linked directly, see `core-ml-ios/build.gradle.kts`) |
 | On-device inference | LiteRT (formerly TFLite) 2.1.5, LiteRT-LM 0.16.0 (Android only) |
 | Voice | Android `SpeechRecognizer` (on-device), FunctionGemma 270M via LiteRT-LM — **Android only**, see [Cross-platform (iOS) port](#cross-platform-ios-port) |
 | Native build (Android) | CMake 3.31.6, NDK 29 |
 | Native build (iOS) | Kotlin/Native `cinterop`, `EAGLContext`/OpenGL ES 3.0, `xcodegen` 2.46.0 |
+| Native build (desktop) | JNI (hand-written clang++ Gradle task, no CMake), real desktop OpenGL 3.3 core profile — no ANGLE, see [Cross-platform (Desktop) port](#cross-platform-desktop-port) |
+| Desktop windowing/GL | LWJGL 3.4.1 (GLFW, for the headless renderer test), `org.lwjglx:lwjgl3-awt` 0.2.4 (`AWTGLCanvas`, for the real app window) |
 | Logging | Timber (Android) |
-| Testing | JUnit 5 / Kotlin/Native test runner (shared `commonMain` source), MockK, GoogleTest |
+| Testing | JUnit 5 / Kotlin/Native test runner (shared `commonMain` source, now including a desktop JVM target), MockK, GoogleTest |
 | Formatting | Spotless + ktlint, enforced via a pre-commit hook |
 | Build | AGP 9.3.0, Gradle version catalogs |
 
