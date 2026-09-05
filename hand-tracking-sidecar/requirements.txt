@@ -1,0 +1,6 @@
+# Pinned per the Stage 0 spike (project plan, §6b.2): mediapipe 1.0.x has a real macOS
+# Metal-calculator-service crash in LIVE_STREAM mode (DrishtiMetalHelper / graph_service.h:139
+# "Service is unavailable"), reproduced directly on this machine. 0.10.30 is the newest release
+# before the 1.0.0 line and matches the version Android's own core-ml already bundles (0.10.29).
+mediapipe==0.10.30
+opencv-python>=4.9,<5

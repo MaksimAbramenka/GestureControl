@@ -23,6 +23,9 @@ ml/venv/
 ml/__pycache__/
 ml/models/*.litertlm
 
+hand-tracking-sidecar/venv/
+hand-tracking-sidecar/__pycache__/
+
 core-ml-ios/vendor/
 
 iosApp/GestureControlApp.xcodeproj/
