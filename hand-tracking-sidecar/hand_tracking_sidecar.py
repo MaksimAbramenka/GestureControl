@@ -72,6 +72,16 @@ def run(model_path: str, camera_index: int = 0) -> None:
                 sys.stderr.write("WARN: camera read failed, stopping\n")
                 break
 
+            # macOS's built-in webcam (AVFoundation, via cv2's avfoundation backend) delivers an
+            # already-mirrored frame for front-facing cameras -- unlike Android/iOS's own camera
+            # analysis streams, which report true sensor orientation (confirmed: their own
+            # pipelines use mirrored=false throughout and are correct). Left uncorrected, this
+            # flips both landmark x-positions (draw/erase tracked the mirror image of the real
+            # hand) and MediaPipe's own handedness label (a real right hand reported as "Left").
+            # Flipping the raw frame here, before MediaPipe ever sees it, fixes both at once,
+            # rather than patching x-coordinates and handedness separately downstream.
+            frame = cv2.flip(frame, 1)
+
             latest_frame_size[0] = frame.shape[1]
             latest_frame_size[1] = frame.shape[0]
             rgb = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)

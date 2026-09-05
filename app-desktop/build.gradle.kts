@@ -9,8 +9,10 @@ kotlin {
 }
 
 dependencies {
+    implementation(project(":domain"))
     implementation(project(":core-ui"))
     implementation(project(":core-engine-desktop"))
+    implementation(project(":core-ml-desktop"))
     implementation(compose.desktop.currentOs)
 
     implementation(platform(libs.lwjgl.bom))
@@ -48,5 +50,14 @@ afterEvaluate {
             coreEngineDesktop.layout.buildDirectory.dir("nativeLib/desktop").get().asFile
                 .resolve("libgesture_canvas_core_desktop.dylib").path,
         )
+        // Same sidecar paths VerifySidecarMain (core-ml-desktop) already resolves relative to
+        // rootDir -- system properties rather than program args, since Compose Desktop's
+        // `application {}` entry point convention doesn't thread args through cleanly.
+        systemProperty("gesture.canvas.sidecar.python", rootDir.resolve("hand-tracking-sidecar/venv/bin/python3").path)
+        systemProperty(
+            "gesture.canvas.sidecar.script",
+            rootDir.resolve("hand-tracking-sidecar/hand_tracking_sidecar.py").path,
+        )
+        systemProperty("gesture.canvas.sidecar.model", rootDir.resolve("app/src/main/assets/hand_landmarker.task").path)
     }
 }
