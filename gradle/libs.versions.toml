@@ -23,6 +23,7 @@ spotless = "8.9.0"
 ktlint = "1.5.0"
 timber = "5.0.1"
 composeMultiplatform = "1.11.1"
+lwjgl = "3.4.1"
 
 [libraries]
 core-ktx = { group = "androidx.core", name = "core-ktx", version.ref = "coreKtx" }
@@ -60,6 +61,11 @@ mockk = { group = "io.mockk", name = "mockk", version.ref = "mockk" }
 mockk-android = { group = "io.mockk", name = "mockk-android", version.ref = "mockk" }
 turbine = { group = "app.cash.turbine", name = "turbine", version.ref = "turbine" }
 timber = { group = "com.jakewharton.timber", name = "timber", version.ref = "timber" }
+
+lwjgl-bom = { group = "org.lwjgl", name = "lwjgl-bom", version.ref = "lwjgl" }
+lwjgl-core = { group = "org.lwjgl", name = "lwjgl" }
+lwjgl-glfw = { group = "org.lwjgl", name = "lwjgl-glfw" }
+lwjgl-opengl = { group = "org.lwjgl", name = "lwjgl-opengl" }
 
 [plugins]
 android-application = { id = "com.android.application", version.ref = "agp" }

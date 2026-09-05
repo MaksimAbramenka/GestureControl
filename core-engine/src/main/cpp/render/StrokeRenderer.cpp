@@ -1,13 +1,17 @@
 #include "render/StrokeRenderer.h"
 
+#include <string>
+
 #include "render/GLCompat.h"
 #include "render/RibbonTessellator.h"
 
 namespace {
 
 // aPosition is in normalized [0,1] canvas space; convert to GL clip space [-1,1] and flip Y,
-// since canvas-space Y grows downward but GL clip space Y grows upward.
-    const char *kVertexShaderSource = R"(#version 300 es
+// since canvas-space Y grows downward but GL clip space Y grows upward. GC_GLSL_VERSION (and,
+// for the fragment shader, GC_GLSL_PRECISION) come from GLCompat.h's platform switch -- this file
+// stays platform-agnostic itself, same as its GL API calls already are.
+    const std::string kVertexShaderSource = std::string(GC_GLSL_VERSION) + R"(
 layout(location = 0) in vec2 aPosition;
 void main() {
     vec2 clipPosition = aPosition * 2.0 - 1.0;
@@ -15,8 +19,7 @@ void main() {
 }
 )";
 
-    const char *kFragmentShaderSource = R"(#version 300 es
-precision mediump float;
+    const std::string kFragmentShaderSource = std::string(GC_GLSL_VERSION) + std::string(GC_GLSL_PRECISION) + R"(
 uniform vec4 uColor;
 out vec4 fragColor;
 void main() {
@@ -24,9 +27,10 @@ void main() {
 }
 )";
 
-    GLuint compileShader(GLenum type, const char *source) {
+    GLuint compileShader(GLenum type, const std::string &source) {
         GLuint shader = glCreateShader(type);
-        glShaderSource(shader, 1, &source, nullptr);
+        const char *sourcePtr = source.c_str();
+        glShaderSource(shader, 1, &sourcePtr, nullptr);
         glCompileShader(shader);
 
         GLint compiled = 0;
