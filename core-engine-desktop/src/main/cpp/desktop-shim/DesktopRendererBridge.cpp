@@ -12,6 +12,7 @@
 #include <jni.h>
 
 #include <cstring>
+#include <unordered_map>
 #include <vector>
 
 #include "render/GLCompat.h"
@@ -30,6 +31,27 @@ namespace {
 
     inline StrokeRenderer *rendererFromHandle(jlong handle) {
         return reinterpret_cast<StrokeRenderer *>(handle);
+    }
+
+    // Offscreen render targets, keyed by renderer instance -- the real app renders here instead
+    // of a visible window's own default framebuffer, since the AWTGLCanvas that owns the GL
+    // context is deliberately kept invisible (a heavyweight AWT component would otherwise always
+    // draw on top of every other Compose element in the window; see Main.kt's own comment). This
+    // state lives here, not in StrokeRenderer itself, since it's a desktop-only concern -- the
+    // shared C++ core stays exactly as portable as it already was for Android/iOS.
+    struct OffscreenTarget {
+        GLuint fbo = 0;
+        GLuint colorRenderbuffer = 0;
+        int width = 0;
+        int height = 0;
+    };
+
+    std::unordered_map<StrokeRenderer *, OffscreenTarget> gOffscreenTargets;
+
+    void destroyOffscreenTarget(OffscreenTarget &target) {
+        if (target.colorRenderbuffer != 0) glDeleteRenderbuffers(1, &target.colorRenderbuffer);
+        if (target.fbo != 0) glDeleteFramebuffers(1, &target.fbo);
+        target = OffscreenTarget{};
     }
 
 }  // namespace
@@ -75,7 +97,52 @@ Java_com_gesturecontrol_core_engine_desktop_NativeDesktopEngine_nativeRendererCr
 extern "C" JNIEXPORT void JNICALL
 Java_com_gesturecontrol_core_engine_desktop_NativeDesktopEngine_nativeRendererDestroy(
         JNIEnv *, jobject, jlong handle) {
-    delete rendererFromHandle(handle);
+    auto *renderer = rendererFromHandle(handle);
+    auto it = gOffscreenTargets.find(renderer);
+    if (it != gOffscreenTargets.end()) {
+        destroyOffscreenTarget(it->second);
+        gOffscreenTargets.erase(it);
+    }
+    delete renderer;
+}
+
+// Creates (or resizes, by recreating) an offscreen FBO + RGBA8 color renderbuffer for this
+// renderer and binds it -- nativeRendererDraw renders into it from then on instead of whatever
+// window's default framebuffer happens to be current, and nativeRendererCapture reads it back the
+// same way it already reads any other currently-bound framebuffer.
+extern "C" JNIEXPORT jboolean JNICALL
+Java_com_gesturecontrol_core_engine_desktop_NativeDesktopEngine_nativeRendererCreateOffscreenTarget(
+        JNIEnv *, jobject, jlong handle, jint width, jint height) {
+    if (width <= 0 || height <= 0) {
+        return false;
+    }
+
+    auto *renderer = rendererFromHandle(handle);
+    OffscreenTarget &target = gOffscreenTargets[renderer];
+    if (target.width == width && target.height == height && target.fbo != 0) {
+        glBindFramebuffer(GL_FRAMEBUFFER, target.fbo);
+        return true;
+    }
+    destroyOffscreenTarget(target);
+
+    glGenFramebuffers(1, &target.fbo);
+    glBindFramebuffer(GL_FRAMEBUFFER, target.fbo);
+    glGenRenderbuffers(1, &target.colorRenderbuffer);
+    glBindRenderbuffer(GL_RENDERBUFFER, target.colorRenderbuffer);
+    glRenderbufferStorage(GL_RENDERBUFFER, GL_RGBA8, width, height);
+    glFramebufferRenderbuffer(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_RENDERBUFFER,
+                              target.colorRenderbuffer);
+
+    const bool complete = glCheckFramebufferStatus(GL_FRAMEBUFFER) == GL_FRAMEBUFFER_COMPLETE;
+    if (!complete) {
+        destroyOffscreenTarget(target);
+        gOffscreenTargets.erase(renderer);
+        return false;
+    }
+
+    target.width = width;
+    target.height = height;
+    return true;
 }
 
 // Assumes a desktop GL context is already current on the calling thread (see this file's own
@@ -125,7 +192,7 @@ Java_com_gesturecontrol_core_engine_desktop_NativeDesktopEngine_nativeRendererCa
     jbyteArray result = env->NewByteArray(static_cast<jsize>(flipped.size()));
     if (result != nullptr) {
         env->SetByteArrayRegion(result, 0, static_cast<jsize>(flipped.size()),
-                                 reinterpret_cast<const jbyte *>(flipped.data()));
+                                reinterpret_cast<const jbyte *>(flipped.data()));
     }
     return result;
 }

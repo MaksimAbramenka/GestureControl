@@ -50,6 +50,9 @@ class DesktopGesturePipeline(
     var gestureClass: GestureClass? by mutableStateOf(null)
         private set
 
+    var fingertip: NormalizedPoint? by mutableStateOf(null)
+        private set
+
     var fps: Float by mutableStateOf(0f)
         private set
 
@@ -64,6 +67,7 @@ class DesktopGesturePipeline(
             ?.gestureClass?.let(gestureSmoother::smooth)
         gestureClass = smoothedGestureClass
         val fingertip = landmarks?.indexFingertip?.let { viewportFingertip(it, imageDimensions) }
+        this.fingertip = fingertip
 
         gestureInputMapper.map(smoothedGestureClass, fingertip, timestampMs).forEach { command ->
             submitInput(command.x, command.y, command.state.toNativeState(), command.pressure, command.timestampMs)

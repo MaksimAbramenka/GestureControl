@@ -48,6 +48,8 @@ object NativeDesktopEngine {
 
     external fun nativeRendererInit(handle: Long): Boolean
 
+    external fun nativeRendererCreateOffscreenTarget(handle: Long, width: Int, height: Int): Boolean
+
     external fun nativeRendererResize(handle: Long, width: Int, height: Int)
 
     external fun nativeRendererDraw(rendererHandle: Long, sceneHandle: Long)
